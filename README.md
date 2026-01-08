@@ -242,12 +242,11 @@ spora-frontend/
 ├── src/
 │   ├── components/     # Reusable UI components
 │   ├── pages/          # Main views (Garden, Laboratory, etc.)
-│   ├── services/       # API communication
-│   ├── utils/          # Helper functions
-│   ├── hooks/          # Custom React hooks
+│   ├── router/         # API communication
+│   ├── services/       # Helper functions
 │   └── styles/         # Global styles
 ├── public/             # Static assets
-└── docs/              # Frontend documentation
+└── docs/               # Frontend documentation
 ```
 
 **Backend Repository (spora-backend):**
