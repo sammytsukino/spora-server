@@ -1,6 +1,4 @@
-# SPORA
-
-> *"Not Revolutionary, But Evolutionary"*
+![SPORA-VISUAL](https://res.cloudinary.com/dsy30p7gf/image/upload/v1770388115/SPORA-LACE-TRANSPARENT-MINI_hzwlvt.webp)
 
 **Text becomes generative art. Collaboration without destruction.**
 
