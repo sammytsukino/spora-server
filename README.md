@@ -233,13 +233,24 @@ npm run dev
 VITE_API_URL=http://localhost:4000/api
 ```
 
+
+
 **Backend (.env):**
+
+You must create your own `.env` file in the root of the backend project (`spora-server`). This file is **not included** for security reasons.
+
+Example content for `.env`:
 ```
 PORT=4000
 MONGO_URL=mongodb://localhost:27017/sporadb
-JWT_SECRET=your_jwt_secret_change_in_production
+JWT_SECRET=your_secret_here
 CORS_ORIGIN=http://localhost:5173
 ```
+
+**Instructions:**
+- Copy the example above into a file named `.env` at the root of this repository.
+- Change the values as needed for your environment (especially `JWT_SECRET`).
+- **Never share your `.env` file or commit it to public repositories.**
 
 ⟡ ═════════════════════════════════════════ ⟡
 
