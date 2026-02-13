@@ -74,6 +74,10 @@ async function updateFlora(req, res) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
+  if (!isAdmin && flora.status !== "blossoming") {
+    return res.status(403).json({ error: "Flora is not open for edits" });
+  }
+
   if (flora.publishedAt && req.body.text && req.body.text !== flora.text) {
     return res.status(400).json({ error: "Text is immutable after publish" });
   }
@@ -103,6 +107,10 @@ async function deleteFlora(req, res) {
   const isAdmin = req.user.role === "admin";
   if (!isOwner && !isAdmin) {
     return res.status(403).json({ error: "Forbidden" });
+  }
+
+  if (!isAdmin && flora.status !== "blossoming") {
+    return res.status(403).json({ error: "Flora is not open for deletion" });
   }
 
   await flora.deleteOne();
