@@ -34,6 +34,7 @@ const floraSchema = new mongoose.Schema(
     generative: {
       soilId: { type: String },
       soilName: { type: String },
+      labState: { type: mongoose.Schema.Types.Mixed },
       seed: {
         sentiment: {
           score: { type: Number },
