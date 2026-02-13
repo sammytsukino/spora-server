@@ -7,6 +7,7 @@ function buildFloraPayload(user, body) {
     authorId: user._id,
     authorUsername: user.username,
     isAuthorAnonymized: false,
+    coAuthors: Array.isArray(body.coAuthors) ? body.coAuthors : [],
     lineage: body.lineage || { generation: 0, childrenCount: 0 },
     status: body.status || "blossoming",
     isHidden: body.isHidden || false,
