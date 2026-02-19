@@ -11,7 +11,7 @@ const floraSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Text is required'],
     minlength: [1, 'Text must be at least 1 character'],
-    maxlength: [1000, 'Text must not exceed 1000 characters']
+    maxlength: [10000, 'Text must not exceed 10000 characters']
   },
   author: {
     type: mongoose.Schema.Types.ObjectId,
@@ -27,9 +27,11 @@ const floraSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  thumbnailUrl: String,
   generative: {
     soilId: String,
     soilName: String,
+    labState: mongoose.Schema.Types.Mixed,
     seed: {
       sentiment: {
         score: Number,

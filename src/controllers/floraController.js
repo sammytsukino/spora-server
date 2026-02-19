@@ -1,4 +1,13 @@
+const { v2: cloudinary } = require("cloudinary");
 const Flora = require("../models/Flora");
+
+if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  });
+}
 
 function buildFloraPayload(user, body) {
   const payload = {
@@ -53,12 +62,32 @@ async function getFlora(req, res) {
 }
 
 async function createFlora(req, res) {
-  const { title, text } = req.body;
+  const { title, text, thumbnailData } = req.body;
   if (!title || !text) {
     return res.status(400).json({ error: "Missing fields" });
   }
 
   const payload = buildFloraPayload(req.user, req.body);
+
+  if (thumbnailData && typeof thumbnailData === "string") {
+    const hasCloudinary = process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET;
+    if (hasCloudinary) {
+      try {
+        const publicId = `spora/floras/thumb_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        const result = await cloudinary.uploader.upload(thumbnailData, {
+          folder: "spora/floras",
+          public_id: publicId.split("/").pop(),
+          resource_type: "image",
+        });
+        if (result?.secure_url) {
+          payload.thumbnailUrl = result.secure_url;
+        }
+      } catch (err) {
+        console.warn("Cloudinary thumbnail upload failed:", err?.message || err);
+      }
+    }
+  }
+
   const flora = await Flora.create(payload);
   res.status(201).json(flora);
 }

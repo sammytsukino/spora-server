@@ -6,7 +6,16 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const cloudinary = require('cloudinary').v2;
 const { connectDB } = require('./db');
+
+if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  });
+}
 const User = require('./models/User');
 const Flora = require('./models/Flora');
 const Report = require('./models/Report');
@@ -18,7 +27,7 @@ connectDB();
 // Middlewares
 app.use(helmet());
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
@@ -175,9 +184,23 @@ app.get('/api/floras/:id', async (req, res) => {
 });
 
 app.post('/api/floras', requireAuth, requireRole('cultivator', 'admin'), async (req, res) => {
-  const { title, text, status, generative } = req.body;
+  const { title, text, status, generative, thumbnailData } = req.body;
   if (!title || !text) {
     return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  let thumbnailUrl = null;
+  if (thumbnailData && process.env.CLOUDINARY_CLOUD_NAME) {
+    try {
+      const result = await cloudinary.uploader.upload(thumbnailData, {
+        folder: 'spora/floras',
+        public_id: `thumb_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+        resource_type: 'image',
+      });
+      thumbnailUrl = result.secure_url;
+    } catch (uploadErr) {
+      console.warn('Cloudinary upload failed:', uploadErr.message);
+    }
   }
 
   try {
@@ -187,16 +210,19 @@ app.post('/api/floras', requireAuth, requireRole('cultivator', 'admin'), async (
       author: req.user._id,
       status: status || 'budding',
       generative,
+      ...(thumbnailUrl && { thumbnailUrl }),
     });
 
     const populated = await Flora.findById(flora._id)
       .populate('author', 'username displayName');
     res.status(201).json(populated);
   } catch (err) {
+    console.error('Flora create error:', err);
     if (err.name === 'ValidationError') {
       return res.status(400).json({ error: err.message });
     }
-    throw err;
+    const msg = process.env.NODE_ENV !== 'production' ? err.message : 'Internal server error';
+    return res.status(500).json({ error: msg });
   }
 });
 
