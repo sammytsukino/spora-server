@@ -360,19 +360,71 @@ app.post('/api/reports', requireAuth, async (req, res) => {
 
 // ====== ADMIN ======
 app.get('/api/admin/metrics', requireAuth, requireRole('admin'), async (req, res) => {
-  const [totalUsers, activeUsers, totalFloras, totalReports, pendingReports] = await Promise.all([
+  const [
+    totalUsers,
+    activeUsers,
+    totalFloras,
+    blossomingFloras,
+    sealedFloras,
+    hiddenFloras,
+    totalReports,
+    pendingReports,
+  ] = await Promise.all([
     User.countDocuments(),
     User.countDocuments({ accountStatus: 'active' }),
     Flora.countDocuments(),
+    Flora.countDocuments({ status: 'blossoming' }),
+    Flora.countDocuments({ status: 'sealed' }),
+    Flora.countDocuments({ isHidden: true }),
     Report.countDocuments(),
     Report.countDocuments({ status: 'pending' }),
   ]);
 
+  const flaggedCount = await Report.distinct('reportedFlora', { status: 'pending' }).then((ids) => ids.length);
+
   res.json({
     users: { total: totalUsers, active: activeUsers },
-    floras: { total: totalFloras },
+    floras: {
+      total: totalFloras,
+      blossoming: blossomingFloras,
+      sealed: sealedFloras,
+      hidden: hiddenFloras,
+    },
     reports: { total: totalReports, pending: pendingReports },
+    flaggedContent: flaggedCount,
   });
+});
+
+app.get('/api/admin/usage/charts', requireAuth, requireRole('admin'), async (req, res) => {
+  const now = new Date();
+  const florasByDay = [];
+  const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    d.setHours(0, 0, 0, 0);
+    const next = new Date(d);
+    next.setDate(next.getDate() + 1);
+    const count = await Flora.countDocuments({
+      createdAt: { $gte: d, $lt: next },
+    });
+    florasByDay.push({ label: dayLabels[d.getDay()], value: count });
+  }
+
+  const newUsersByWeek = [];
+  for (let w = 3; w >= 0; w--) {
+    const start = new Date(now);
+    start.setDate(start.getDate() - (w + 1) * 7);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    const count = await User.countDocuments({
+      createdAt: { $gte: start, $lt: end },
+    });
+    newUsersByWeek.push({ label: `W${4 - w}`, value: count });
+  }
+
+  res.json({ florasByDay, newUsersByWeek });
 });
 
 app.get('/api/admin/usage', requireAuth, requireRole('admin'), async (req, res) => {
@@ -404,9 +456,17 @@ app.get('/api/admin/users', requireAuth, requireRole('admin'), async (req, res) 
     .select('-password')
     .sort({ createdAt: -1 })
     .limit(parseInt(limit))
-    .skip(parseInt(skip));
+    .skip(parseInt(skip))
+    .lean();
 
-  res.json(users);
+  const usersWithCounts = await Promise.all(
+    users.map(async (u) => {
+      const florasCount = await Flora.countDocuments({ author: u._id });
+      return { ...u, florasCount };
+    })
+  );
+
+  res.json(usersWithCounts);
 });
 
 app.patch('/api/admin/users/:id/role', requireAuth, requireRole('admin'), async (req, res) => {
