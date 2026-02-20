@@ -12,6 +12,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     maxlength: [50, 'Display name must not exceed 50 characters']
   },
+  avatar: { type: String },
+  bio: { type: String, maxlength: 500 },
+  followersCount: { type: Number, default: 0 },
+  followingCount: { type: Number, default: 0 },
   email: {
     type: String,
     required: [true, 'Email is required'],

@@ -4,6 +4,10 @@ const userSchema = new mongoose.Schema(
   {
     username: { type: String, unique: true, required: true, trim: true },
     displayName: { type: String, trim: true },
+    avatar: { type: String, trim: true },
+    bio: { type: String, trim: true, maxlength: 500 },
+    followersCount: { type: Number, default: 0 },
+    followingCount: { type: Number, default: 0 },
     email: { type: String, unique: true, required: true, lowercase: true },
     password: { type: String, required: true },
     role: { type: String, enum: ["cultivator", "admin"], default: "cultivator" },
