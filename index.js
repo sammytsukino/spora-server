@@ -115,12 +115,12 @@ app.post('/api/auth/signup', async (req, res) => {
 });
 
 app.post('/api/auth/signin', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
+  const { username, password } = req.body;
+  if (!username || !password) {
     return res.status(400).json({ error: 'Missing fields' });
   }
 
-  const user = await User.findOne({ email: email.toLowerCase() });
+  const user = await User.findOne({ username: username.trim() });
   if (!user || user.accountStatus !== 'active') {
     return res.status(401).json({ error: 'Invalid credentials' });
   }

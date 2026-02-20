@@ -59,12 +59,12 @@ async function signUp(req, res) {
 }
 
 async function signIn(req, res) {
-  const { email, password } = req.body;
-  if (!email || !password) {
+  const { username, password } = req.body;
+  if (!username || !password) {
     return res.status(400).json({ error: "Missing fields" });
   }
 
-  const user = await User.findOne({ email: email.toLowerCase() });
+  const user = await User.findOne({ username: String(username).trim() });
   if (!user || user.accountStatus !== "active") {
     return res.status(401).json({ error: "Invalid credentials" });
   }
