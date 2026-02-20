@@ -18,11 +18,42 @@ async function logAdminAction({ req, action, actionCategory, targetType, targetI
 }
 
 async function getMetrics(req, res) {
-  const totalFloras = await Flora.countDocuments();
-  const totalUsers = await User.countDocuments({ accountStatus: "active" });
-  const pendingReports = await Report.countDocuments({ status: "pending" });
+  const [
+    totalUsers,
+    activeUsers,
+    totalFloras,
+    blossomingFloras,
+    sealedFloras,
+    hiddenFloras,
+    totalReports,
+    pendingReports,
+  ] = await Promise.all([
+    User.countDocuments(),
+    User.countDocuments({ accountStatus: "active" }),
+    Flora.countDocuments(),
+    Flora.countDocuments({ status: "blossoming" }),
+    Flora.countDocuments({ status: "sealed" }),
+    Flora.countDocuments({ isHidden: true }),
+    Report.countDocuments(),
+    Report.countDocuments({ status: "pending" }),
+  ]);
 
-  res.json({ totalFloras, totalUsers, pendingReports });
+  const flaggedIds = await Report.distinct("reportedFloraId", {
+    status: "pending",
+  });
+  const flaggedContent = flaggedIds.length;
+
+  res.json({
+    users: { total: totalUsers, active: activeUsers },
+    floras: {
+      total: totalFloras,
+      blossoming: blossomingFloras,
+      sealed: sealedFloras,
+      hidden: hiddenFloras,
+    },
+    reports: { total: totalReports, pending: pendingReports },
+    flaggedContent,
+  });
 }
 
 async function getUsage(req, res) {
@@ -53,9 +84,59 @@ async function getUsage(req, res) {
   res.json({ florasByDay, newUsersByWeek });
 }
 
+async function getUsageCharts(req, res) {
+  const now = new Date();
+  const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const florasByDay = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    d.setHours(0, 0, 0, 0);
+    const next = new Date(d);
+    next.setDate(next.getDate() + 1);
+    const count = await Flora.countDocuments({
+      createdAt: { $gte: d, $lt: next },
+    });
+    florasByDay.push({ label: dayLabels[d.getDay()], value: count });
+  }
+
+  const newUsersByWeek = [];
+  for (let w = 3; w >= 0; w--) {
+    const start = new Date(now);
+    start.setDate(start.getDate() - (w + 1) * 7);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    const count = await User.countDocuments({
+      createdAt: { $gte: start, $lt: end },
+    });
+    newUsersByWeek.push({ label: `W${4 - w}`, value: count });
+  }
+
+  res.json({ florasByDay, newUsersByWeek });
+}
+
 async function listUsers(req, res) {
-  const users = await User.find().sort({ createdAt: -1 });
-  res.json(users);
+  const { limit = 50, skip = 0, role, status } = req.query;
+  const filter = {};
+  if (role) filter.role = role;
+  if (status) filter.accountStatus = status;
+
+  const users = await User.find(filter)
+    .select("-password")
+    .sort({ createdAt: -1 })
+    .limit(parseInt(limit) || 50)
+    .skip(parseInt(skip) || 0)
+    .lean();
+
+  const usersWithCounts = await Promise.all(
+    users.map(async (u) => {
+      const florasCount = await Flora.countDocuments({ authorId: u._id });
+      return { ...u, florasCount };
+    })
+  );
+
+  res.json(usersWithCounts);
 }
 
 async function updateUserRole(req, res) {
@@ -145,10 +226,26 @@ async function softDeleteUser(req, res) {
 }
 
 async function listReports(req, res) {
-  const { status } = req.query;
+  const { limit = 50, skip = 0, status } = req.query;
   const filter = status ? { status } : {};
-  const reports = await Report.find(filter).sort({ createdAt: -1 });
-  res.json(reports);
+
+  const reports = await Report.find(filter)
+    .populate("reportedBy", "username")
+    .populate("reportedFloraId", "title authorUsername")
+    .populate("resolution.resolvedBy", "username")
+    .sort({ createdAt: -1 })
+    .limit(parseInt(limit) || 50)
+    .skip(parseInt(skip) || 0);
+
+  const normalized = reports.map((r) => {
+    const obj = r.toObject ? r.toObject() : r;
+    return {
+      ...obj,
+      reportedFlora: obj.reportedFloraId,
+    };
+  });
+
+  res.json(normalized);
 }
 
 async function updateReport(req, res) {
@@ -182,10 +279,30 @@ async function updateReport(req, res) {
 }
 
 async function listFlagged(req, res) {
-  const flagged = await Flora.find({
-    $or: [{ status: "hidden" }, { isHidden: true }],
-  }).sort({ updatedAt: -1 });
-  res.json(flagged);
+  const { limit = 50, skip = 0 } = req.query;
+
+  const flaggedFloraIds = await Report.distinct("reportedFloraId", {
+    status: "pending",
+  });
+
+  const floras = await Flora.find({ _id: { $in: flaggedFloraIds } })
+    .populate("authorId", "username displayName")
+    .sort({ createdAt: -1 })
+    .limit(parseInt(limit) || 50)
+    .skip(parseInt(skip) || 0)
+    .lean();
+
+  const florasWithReports = await Promise.all(
+    floras.map(async (f) => {
+      const reportCount = await Report.countDocuments({
+        reportedFloraId: f._id,
+        status: "pending",
+      });
+      return { ...f, reportCount, author: f.authorId };
+    })
+  );
+
+  res.json(florasWithReports);
 }
 
 async function updateFloraStatus(req, res) {
@@ -219,6 +336,7 @@ async function updateFloraStatus(req, res) {
 module.exports = {
   getMetrics,
   getUsage,
+  getUsageCharts,
   listUsers,
   updateUserRole,
   updateUserStatus,

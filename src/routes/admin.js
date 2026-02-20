@@ -19,6 +19,7 @@ router.use(requireAuth, requireRole("admin"));
 
 router.get("/metrics", getMetrics);
 router.get("/usage", getUsage);
+router.get("/usage/charts", getUsageCharts);
 router.get("/users", listUsers);
 router.patch("/users/:id/role", updateUserRole);
 router.patch("/users/:id/status", updateUserStatus);

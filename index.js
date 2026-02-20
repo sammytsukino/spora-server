@@ -214,8 +214,9 @@ app.patch('/api/auth/me', requireAuth, async (req, res) => {
 
 // ====== FLORAS ======
 app.get('/api/floras', async (req, res) => {
-  const { limit = 50, skip = 0, author, authorId, status } = req.query;
-  const filter = { isHidden: false };
+  const { limit = 50, skip = 0, author, authorId, status, includeHidden } = req.query;
+  const filter = {};
+  if (includeHidden !== 'true') filter.isHidden = false;
   const authorFilter = authorId || author;
   if (authorFilter) filter.author = authorFilter;
   if (status) filter.status = status;
@@ -224,9 +225,17 @@ app.get('/api/floras', async (req, res) => {
     .populate('author', 'username displayName')
     .sort({ createdAt: -1 })
     .limit(parseInt(limit))
-    .skip(parseInt(skip));
+    .skip(parseInt(skip))
+    .lean();
 
-  res.json(floras);
+  const normalized = floras.map((f) => {
+    const authorName = f.isAuthorAnonymized || f.authorUsername
+      ? (f.authorUsername || '@Anonymous')
+      : (f.author?.username ? (f.author.username.startsWith('@') ? f.author.username : `@${f.author.username}`) : '@Anonymous');
+    return { ...f, authorUsername: authorName };
+  });
+
+  res.json(normalized);
 });
 
 app.get('/api/floras/:id', async (req, res) => {
@@ -359,6 +368,30 @@ app.post('/api/reports', requireAuth, async (req, res) => {
 });
 
 // ====== ADMIN ======
+app.get('/api/admin/floras', requireAuth, requireRole('admin'), async (req, res) => {
+  const { limit = 100, skip = 0, status, hidden } = req.query;
+  const filter = {};
+  if (status) filter.status = status;
+  if (hidden === 'true') filter.isHidden = true;
+  if (hidden === 'false') filter.isHidden = false;
+
+  const floras = await Flora.find(filter)
+    .populate('author', 'username displayName')
+    .sort({ createdAt: -1 })
+    .limit(parseInt(limit))
+    .skip(parseInt(skip))
+    .lean();
+
+  const withAuthorDisplay = floras.map((f) => {
+    const authorName = f.isAuthorAnonymized || f.authorUsername
+      ? (f.authorUsername || '@Anonymous')
+      : (f.author?.username ? (f.author.username.startsWith('@') ? f.author.username : `@${f.author.username}`) : '@Anonymous');
+    return { ...f, authorUsername: authorName };
+  });
+
+  res.json(withAuthorDisplay);
+});
+
 app.get('/api/admin/metrics', requireAuth, requireRole('admin'), async (req, res) => {
   const [
     totalUsers,
@@ -382,6 +415,19 @@ app.get('/api/admin/metrics', requireAuth, requireRole('admin'), async (req, res
 
   const flaggedCount = await Report.distinct('reportedFlora', { status: 'pending' }).then((ids) => ids.length);
 
+  const now = new Date();
+  const sevenDaysAgo = new Date(now);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const fourteenDaysAgo = new Date(now);
+  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+
+  const [usersLast7d, usersPrev7d, florasLast7d, florasPrev7d] = await Promise.all([
+    User.countDocuments({ createdAt: { $gte: sevenDaysAgo } }),
+    User.countDocuments({ createdAt: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo } }),
+    Flora.countDocuments({ createdAt: { $gte: sevenDaysAgo } }),
+    Flora.countDocuments({ createdAt: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo } }),
+  ]);
+
   res.json({
     users: { total: totalUsers, active: activeUsers },
     floras: {
@@ -392,6 +438,14 @@ app.get('/api/admin/metrics', requireAuth, requireRole('admin'), async (req, res
     },
     reports: { total: totalReports, pending: pendingReports },
     flaggedContent: flaggedCount,
+    growth: {
+      usersLast7Days: usersLast7d,
+      usersPrev7Days: usersPrev7d,
+      usersGrowth: usersPrev7d > 0 ? Math.round(((usersLast7d - usersPrev7d) / usersPrev7d) * 100) : (usersLast7d > 0 ? 100 : 0),
+      florasLast7Days: florasLast7d,
+      florasPrev7Days: florasPrev7d,
+      florasGrowth: florasPrev7d > 0 ? Math.round(((florasLast7d - florasPrev7d) / florasPrev7d) * 100) : (florasLast7d > 0 ? 100 : 0),
+    },
   });
 });
 
@@ -519,6 +573,29 @@ app.patch('/api/admin/users/:id/status', requireAuth, requireRole('admin'), asyn
   });
 
   res.json({ id: user._id, username: user.username, accountStatus: user.accountStatus });
+});
+
+app.post('/api/admin/users/:id/unsign', requireAuth, requireRole('admin'), async (req, res) => {
+  const user = await User.findById(req.params.id);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  const result = await Flora.updateMany(
+    { author: user._id },
+    { $set: { authorUsername: '@Anonymous', isAuthorAnonymized: true } }
+  );
+
+  await AdminLog.create({
+    admin: req.user._id,
+    action: 'user_unsign',
+    targetType: 'user',
+    targetId: user._id,
+    reason: req.body.reason,
+    metadata: { florasAnonymized: result.modifiedCount },
+  });
+
+  res.json({ florasAnonymized: result.modifiedCount });
 });
 
 app.delete('/api/admin/users/:id', requireAuth, requireRole('admin'), async (req, res) => {

@@ -18,6 +18,8 @@ const floraSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  authorUsername: { type: String },
+  isAuthorAnonymized: { type: Boolean, default: false },
   status: {
     type: String,
     enum: ['budding', 'blossoming', 'wilting', 'sealed'],
