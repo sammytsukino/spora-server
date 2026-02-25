@@ -212,6 +212,24 @@ app.patch('/api/auth/me', requireAuth, async (req, res) => {
   });
 });
 
+app.post('/api/auth/me/unsign', requireAuth, async (req, res) => {
+  const user = req.user;
+  const suffix = `_${user._id.toString().slice(-8)}`;
+  user.username = `[forbidden_author]${suffix}`;
+  user.displayName = '[forbidden_author]';
+  user.bio = '';
+  user.avatar = undefined;
+  user.email = `forbidden_author${suffix}@anonymized.local`;
+  await user.save();
+
+  const result = await Flora.updateMany(
+    { author: user._id },
+    { $set: { authorUsername: '[forbidden_author]', isAuthorAnonymized: true } }
+  );
+
+  res.json({ florasAnonymized: result.modifiedCount });
+});
+
 // ====== FLORAS ======
 app.get('/api/floras', async (req, res) => {
   const { limit = 50, skip = 0, author, authorId, status, includeHidden } = req.query;
