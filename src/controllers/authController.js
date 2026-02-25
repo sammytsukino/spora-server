@@ -15,11 +15,22 @@ if (
   });
 }
 
-function signToken(user) {
+const ACCESS_TOKEN_EXPIRY = "15m";
+const REFRESH_TOKEN_EXPIRY = "7d";
+
+function signAccessToken(user) {
   return jwt.sign(
-    { sub: user._id.toString(), role: user.role },
+    { sub: user._id.toString(), role: user.role, type: "access" },
     process.env.JWT_SECRET,
-    { expiresIn: "7d" }
+    { expiresIn: ACCESS_TOKEN_EXPIRY }
+  );
+}
+
+function signRefreshToken(user) {
+  return jwt.sign(
+    { sub: user._id.toString(), role: user.role, type: "refresh" },
+    process.env.JWT_SECRET,
+    { expiresIn: REFRESH_TOKEN_EXPIRY }
   );
 }
 
@@ -44,9 +55,11 @@ async function signUp(req, res) {
     password: hash,
   });
 
-  const token = signToken(user);
+  const token = signAccessToken(user);
+  const refreshToken = signRefreshToken(user);
   res.status(201).json({
     token,
+    refreshToken,
     user: {
       id: user._id,
       username: user.username,
@@ -77,9 +90,11 @@ async function signIn(req, res) {
   user.lastLoginAt = new Date();
   await user.save();
 
-  const token = signToken(user);
+  const token = signAccessToken(user);
+  const refreshToken = signRefreshToken(user);
   res.json({
     token,
+    refreshToken,
     user: {
       id: user._id,
       username: user.username,
@@ -89,6 +104,39 @@ async function signIn(req, res) {
       role: user.role,
     },
   });
+}
+
+async function refresh(req, res) {
+  const { refreshToken } = req.body;
+  if (!refreshToken || typeof refreshToken !== "string") {
+    return res.status(400).json({ error: "Missing refresh token" });
+  }
+  try {
+    const payload = jwt.verify(refreshToken.trim(), process.env.JWT_SECRET);
+    if (payload.type !== "refresh") {
+      return res.status(401).json({ error: "Invalid refresh token" });
+    }
+    const user = await User.findById(payload.sub);
+    if (!user || user.accountStatus !== "active") {
+      return res.status(401).json({ error: "Invalid user" });
+    }
+    const token = signAccessToken(user);
+    const newRefreshToken = signRefreshToken(user);
+    res.json({
+      token,
+      refreshToken: newRefreshToken,
+      user: {
+        id: user._id,
+        username: user.username,
+        displayName: user.displayName,
+        avatar: user.avatar,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch {
+    return res.status(401).json({ error: "Invalid refresh token" });
+  }
 }
 
 async function me(req, res) {
@@ -164,4 +212,4 @@ async function updateProfile(req, res) {
   });
 }
 
-module.exports = { signUp, signIn, me, updateProfile };
+module.exports = { signUp, signIn, refresh, me, updateProfile };

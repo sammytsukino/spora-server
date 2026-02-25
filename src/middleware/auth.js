@@ -10,6 +10,9 @@ async function requireAuth(req, res, next) {
   const token = header.replace("Bearer ", "").trim();
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
+    if (payload.type === "refresh") {
+      return res.status(401).json({ error: "Invalid token" });
+    }
     const user = await User.findById(payload.sub);
     if (!user || user.accountStatus !== "active") {
       return res.status(401).json({ error: "Invalid user" });
