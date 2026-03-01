@@ -94,6 +94,8 @@ app.get('/api/health', (req, res) => {
 });
 
 // ====== AUTH ======
+const { generateVerificationToken, sendVerificationEmail, sendVerificationEmailToUser } = require('./src/services/emailService');
+
 app.post('/api/auth/signup', async (req, res) => {
   const { username, displayName, email, password } = req.body;
   if (!username || !email || !password) {
@@ -103,31 +105,124 @@ app.post('/api/auth/signup', async (req, res) => {
   const existing = await User.findOne({
     $or: [{ username }, { email: email.toLowerCase() }],
   });
-  if (existing) {
-    return res.status(409).json({ error: 'User already exists' });
-  }
 
   const hash = await bcrypt.hash(password, 10);
-  const user = await User.create({
-    username,
-    displayName,
-    email: email.toLowerCase(),
-    password: hash,
+  const verificationToken = generateVerificationToken();
+  const expiresAt = new Date();
+  expiresAt.setHours(expiresAt.getHours() + 48);
+
+  let user;
+  if (existing) {
+    if (existing.emailVerified) {
+      return res.status(409).json({ error: 'User already exists' });
+    }
+    existing.displayName = displayName || existing.displayName;
+    existing.password = hash;
+    existing.emailVerificationToken = verificationToken;
+    existing.emailVerificationExpires = expiresAt;
+    await existing.save();
+    user = existing;
+  } else {
+    user = await User.create({
+      username,
+      displayName,
+      email: email.toLowerCase(),
+      password: hash,
+      emailVerified: false,
+      emailVerificationToken: verificationToken,
+      emailVerificationExpires: expiresAt,
+    });
+  }
+
+  await sendVerificationEmail(user.email, verificationToken);
+
+  res.status(201).json({
+    message: 'Check your email to verify your account',
+    emailSent: true,
+  });
+});
+
+function normalizeToken(token) {
+  if (Array.isArray(token)) token = token[0];
+  if (!token || typeof token !== 'string') return null;
+  try {
+    token = decodeURIComponent(String(token).trim());
+  } catch {
+    token = String(token).trim();
+  }
+  return token.length > 0 ? token : null;
+}
+
+async function handleVerifyEmail(token) {
+  token = normalizeToken(token);
+  if (!token) {
+    return { status: 400, body: { error: 'Missing or invalid token' } };
+  }
+
+  const user = await User.findOne({
+    emailVerificationToken: token,
+    emailVerificationExpires: { $gt: new Date() },
   });
 
-  const token = signAccessToken(user);
+  if (!user) {
+    const expiredUser = await User.findOne({ emailVerificationToken: token });
+    if (expiredUser) {
+      console.warn('[verify-email] Token expired for user:', expiredUser.email);
+    } else {
+      console.warn('[verify-email] No user found. Token length:', token.length, 'First 8 chars:', token.slice(0, 8));
+    }
+    return { status: 400, body: { error: 'Invalid or expired verification link', code: 'VERIFICATION_FAILED' } };
+  }
+
+  user.emailVerified = true;
+  user.emailVerificationToken = undefined;
+  user.emailVerificationExpires = undefined;
+  await user.save();
+
+  const accessToken = signAccessToken(user);
   const refreshToken = signRefreshToken(user);
-  res.status(201).json({
-    token,
-    refreshToken,
-    user: {
-      id: user._id,
-      username: user.username,
-      displayName: user.displayName,
-      email: user.email,
-      role: user.role,
+  return {
+    status: 200,
+    body: {
+      success: true,
+      token: accessToken,
+      refreshToken,
+      user: {
+        id: user._id,
+        username: user.username,
+        displayName: user.displayName,
+        avatar: user.avatar,
+        email: user.email,
+        role: user.role,
+      },
     },
-  });
+  };
+}
+
+app.get('/api/auth/verify-email', async (req, res) => {
+  const result = await handleVerifyEmail(req.query.token);
+  res.status(result.status).json(result.body);
+});
+
+app.post('/api/auth/verify-email', async (req, res) => {
+  const result = await handleVerifyEmail(req.body?.token);
+  res.status(result.status).json(result.body);
+});
+
+app.post('/api/auth/resend-verification', async (req, res) => {
+  const { email } = req.body;
+  if (!email || typeof email !== 'string') {
+    return res.status(400).json({ error: 'Email required' });
+  }
+  const user = await User.findOne({ email: email.toLowerCase().trim() });
+  if (!user) {
+    return res.status(404).json({ error: 'No account found with that email' });
+  }
+  if (user.emailVerified) {
+    return res.status(400).json({ error: 'Email already verified. You can sign in.' });
+  }
+  await sendVerificationEmailToUser(user);
+  res.json({ message: 'Verification email sent. Check your inbox and spam folder.' });
 });
 
 app.post('/api/auth/signin', async (req, res) => {
@@ -136,9 +231,16 @@ app.post('/api/auth/signin', async (req, res) => {
     return res.status(400).json({ error: 'Missing fields' });
   }
 
-  const user = await User.findOne({ username: username.trim() });
+  const user = await User.findOne({ username: String(username).trim() });
   if (!user || user.accountStatus !== 'active') {
     return res.status(401).json({ error: 'Invalid credentials' });
+  }
+
+  if (user.emailVerified === false && user.role !== 'admin') {
+    return res.status(403).json({
+      error: 'Email not verified',
+      code: 'EMAIL_NOT_VERIFIED',
+    });
   }
 
   const ok = await bcrypt.compare(password, user.password);
@@ -158,6 +260,7 @@ app.post('/api/auth/signin', async (req, res) => {
       id: user._id,
       username: user.username,
       displayName: user.displayName,
+      avatar: user.avatar,
       email: user.email,
       role: user.role,
     },
@@ -283,7 +386,7 @@ app.post('/api/auth/me/unsign', requireAuth, async (req, res) => {
 // ====== FLORAS ======
 app.get('/api/floras', async (req, res) => {
   const { limit = 50, skip = 0, author, authorId, status, includeHidden } = req.query;
-  const filter = {};
+  const filter = { isDeleted: { $ne: true } };
   if (includeHidden !== 'true') filter.isHidden = false;
   const authorFilter = authorId || author;
   if (authorFilter) filter.author = authorFilter;
@@ -307,7 +410,7 @@ app.get('/api/floras', async (req, res) => {
 });
 
 app.get('/api/floras/:id', async (req, res) => {
-  const flora = await Flora.findOne({ _id: req.params.id, isHidden: false })
+  const flora = await Flora.findOne({ _id: req.params.id, isHidden: false, isDeleted: { $ne: true } })
     .populate('author', 'username displayName');
   if (!flora) {
     return res.status(404).json({ error: 'Flora not found' });
@@ -438,7 +541,7 @@ app.post('/api/reports', requireAuth, async (req, res) => {
 // ====== ADMIN ======
 app.get('/api/admin/floras', requireAuth, requireRole('admin'), async (req, res) => {
   const { limit = 100, skip = 0, status, hidden } = req.query;
-  const filter = {};
+  const filter = { isDeleted: { $ne: true } };
   if (status) filter.status = status;
   if (hidden === 'true') filter.isHidden = true;
   if (hidden === 'false') filter.isHidden = false;
@@ -458,6 +561,49 @@ app.get('/api/admin/floras', requireAuth, requireRole('admin'), async (req, res)
   });
 
   res.json(withAuthorDisplay);
+});
+
+app.patch('/api/admin/floras/batch', requireAuth, requireRole('admin'), async (req, res) => {
+  const { ids = [], action } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0 || !action) {
+    return res.status(400).json({ error: 'Missing ids or action' });
+  }
+  if (!['hide', 'unhide', 'delete'].includes(action)) {
+    return res.status(400).json({ error: 'Invalid action' });
+  }
+  const results = { updated: 0, failed: [] };
+  for (const id of ids) {
+    try {
+      const flora = await Flora.findById(id);
+      if (!flora || flora.isDeleted) {
+        results.failed.push(id);
+        continue;
+      }
+      if (action === 'hide') {
+        flora.isHidden = true;
+        await flora.save();
+      } else if (action === 'unhide') {
+        flora.isHidden = false;
+        await flora.save();
+      } else if (action === 'delete') {
+        flora.isHidden = true;
+        flora.isDeleted = true;
+        flora.deletedAt = new Date();
+        await flora.save();
+      }
+      results.updated++;
+      await AdminLog.create({
+        admin: req.user._id,
+        action: `flora_batch_${action}`,
+        targetType: 'flora',
+        targetId: flora._id,
+        reason: action,
+      });
+    } catch {
+      results.failed.push(id);
+    }
+  }
+  res.json(results);
 });
 
 app.get('/api/admin/metrics', requireAuth, requireRole('admin'), async (req, res) => {
@@ -738,7 +884,10 @@ app.get('/api/admin/flagged', requireAuth, requireRole('admin'), async (req, res
   const { limit = 50, skip = 0 } = req.query;
 
   const flaggedFloraIds = await Report.distinct('reportedFlora', { status: 'pending' });
-  const floras = await Flora.find({ _id: { $in: flaggedFloraIds } })
+  const floras = await Flora.find({
+    _id: { $in: flaggedFloraIds },
+    isDeleted: { $ne: true },
+  })
     .populate('author', 'username displayName')
     .sort({ createdAt: -1 })
     .limit(parseInt(limit))

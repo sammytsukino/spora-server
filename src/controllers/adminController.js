@@ -18,6 +18,7 @@ async function logAdminAction({ req, action, actionCategory, targetType, targetI
 }
 
 async function getMetrics(req, res) {
+  const floraBaseFilter = { isDeleted: { $ne: true } };
   const [
     totalUsers,
     activeUsers,
@@ -30,10 +31,10 @@ async function getMetrics(req, res) {
   ] = await Promise.all([
     User.countDocuments(),
     User.countDocuments({ accountStatus: "active" }),
-    Flora.countDocuments(),
-    Flora.countDocuments({ status: "blossoming" }),
-    Flora.countDocuments({ status: "sealed" }),
-    Flora.countDocuments({ isHidden: true }),
+    Flora.countDocuments(floraBaseFilter),
+    Flora.countDocuments({ ...floraBaseFilter, status: "blossoming" }),
+    Flora.countDocuments({ ...floraBaseFilter, status: "sealed" }),
+    Flora.countDocuments({ ...floraBaseFilter, isHidden: true }),
     Report.countDocuments(),
     Report.countDocuments({ status: "pending" }),
   ]);
@@ -58,6 +59,7 @@ async function getMetrics(req, res) {
 
 async function getUsage(req, res) {
   const florasByDay = await Flora.aggregate([
+    { $match: { isDeleted: { $ne: true } } },
     {
       $group: {
         _id: {
@@ -95,6 +97,7 @@ async function getUsageCharts(req, res) {
     const next = new Date(d);
     next.setDate(next.getDate() + 1);
     const count = await Flora.countDocuments({
+      isDeleted: { $ne: true },
       createdAt: { $gte: d, $lt: next },
     });
     florasByDay.push({ label: dayLabels[d.getDay()], value: count });
@@ -285,7 +288,10 @@ async function listFlagged(req, res) {
     status: "pending",
   });
 
-  const floras = await Flora.find({ _id: { $in: flaggedFloraIds } })
+  const floras = await Flora.find({
+    _id: { $in: flaggedFloraIds },
+    isDeleted: { $ne: true },
+  })
     .populate("authorId", "username displayName")
     .sort({ createdAt: -1 })
     .limit(parseInt(limit) || 50)
@@ -333,6 +339,138 @@ async function updateFloraStatus(req, res) {
   res.json(flora);
 }
 
+async function batchUpdateFloras(req, res) {
+  const { ids = [], action } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0 || !action) {
+    return res.status(400).json({ error: "Missing ids or action" });
+  }
+  if (!["hide", "unhide", "delete"].includes(action)) {
+    return res.status(400).json({ error: "Invalid action" });
+  }
+
+  const results = { updated: 0, failed: [] };
+  for (const id of ids) {
+    try {
+      const flora = await Flora.findById(id);
+      if (!flora || flora.isDeleted) {
+        results.failed.push(id);
+        continue;
+      }
+      if (action === "hide") {
+        flora.isHidden = true;
+        await flora.save();
+      } else if (action === "unhide") {
+        if (flora.isDeleted) {
+          results.failed.push(id);
+          continue;
+        }
+        flora.isHidden = false;
+        await flora.save();
+      } else if (action === "delete") {
+        flora.isHidden = true;
+        flora.isDeleted = true;
+        flora.deletedAt = new Date();
+        await flora.save();
+      }
+      results.updated++;
+      await logAdminAction({
+        req,
+        action: `flora_batch_${action}`,
+        actionCategory: "content_moderation",
+        targetType: "flora",
+        targetId: flora._id,
+        targetDescription: flora.title,
+        details: { batchAction: action },
+      });
+    } catch {
+      results.failed.push(id);
+    }
+  }
+  res.json(results);
+}
+
+async function batchUpdateReports(req, res) {
+  const { ids = [], action } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0 || !action) {
+    return res.status(400).json({ error: "Missing ids or action" });
+  }
+  if (!["resolve", "dismiss"].includes(action)) {
+    return res.status(400).json({ error: "Invalid action" });
+  }
+
+  const status = action === "resolve" ? "resolved" : "dismissed";
+  const results = { updated: 0, failed: [] };
+  for (const id of ids) {
+    try {
+      const report = await Report.findById(id);
+      if (!report) {
+        results.failed.push(id);
+        continue;
+      }
+      report.status = status;
+      report.resolution = report.resolution || {};
+      report.resolution.resolvedBy = req.user._id;
+      report.resolution.resolvedAt = new Date();
+      await report.save();
+      results.updated++;
+      await logAdminAction({
+        req,
+        action: `report_batch_${action}`,
+        actionCategory: "content_moderation",
+        targetType: "report",
+        targetId: report._id,
+        targetDescription: report.reason || report.category,
+        details: { batchAction: action },
+      });
+    } catch {
+      results.failed.push(id);
+    }
+  }
+  res.json(results);
+}
+
+async function batchUpdateUsers(req, res) {
+  const { ids = [], action } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0 || !action) {
+    return res.status(400).json({ error: "Missing ids or action" });
+  }
+  if (!["suspend", "ban", "activate"].includes(action)) {
+    return res.status(400).json({ error: "Invalid action" });
+  }
+
+  const statusMap = {
+    suspend: "suspended",
+    ban: "deleted",
+    activate: "active",
+  };
+  const status = statusMap[action];
+  const results = { updated: 0, failed: [] };
+  for (const id of ids) {
+    try {
+      const user = await User.findById(id);
+      if (!user) {
+        results.failed.push(id);
+        continue;
+      }
+      user.accountStatus = status;
+      await user.save();
+      results.updated++;
+      await logAdminAction({
+        req,
+        action: `user_batch_${action}`,
+        actionCategory: "user_management",
+        targetType: "user",
+        targetId: user._id,
+        targetDescription: user.username,
+        details: { batchAction: action },
+      });
+    } catch {
+      results.failed.push(id);
+    }
+  }
+  res.json(results);
+}
+
 module.exports = {
   getMetrics,
   getUsage,
@@ -345,4 +483,7 @@ module.exports = {
   updateReport,
   listFlagged,
   updateFloraStatus,
+  batchUpdateFloras,
+  batchUpdateReports,
+  batchUpdateUsers,
 };

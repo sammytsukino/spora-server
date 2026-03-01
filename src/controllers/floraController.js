@@ -36,7 +36,7 @@ function buildFloraPayload(user, body) {
 
 async function listFloras(req, res) {
   const { status, authorId, generation } = req.query;
-  const filter = {};
+  const filter = { isDeleted: { $ne: true } };
   if (status) {
     filter.status = status;
   } else {

@@ -2,6 +2,7 @@ const express = require("express");
 const {
   getMetrics,
   getUsage,
+  getUsageCharts,
   listUsers,
   updateUserRole,
   updateUserStatus,
@@ -10,6 +11,9 @@ const {
   updateReport,
   listFlagged,
   updateFloraStatus,
+  batchUpdateFloras,
+  batchUpdateReports,
+  batchUpdateUsers,
 } = require("../controllers/adminController");
 const { requireAuth, requireRole } = require("../middleware/auth");
 
@@ -30,5 +34,8 @@ router.patch("/reports/:id", updateReport);
 
 router.get("/flagged", listFlagged);
 router.patch("/floras/:id/status", updateFloraStatus);
+router.patch("/floras/batch", batchUpdateFloras);
+router.patch("/reports/batch", batchUpdateReports);
+router.patch("/users/batch", batchUpdateUsers);
 
 module.exports = router;

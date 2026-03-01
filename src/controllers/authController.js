@@ -2,6 +2,10 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { v2: cloudinary } = require("cloudinary");
 const User = require("../models/User");
+const {
+  generateVerificationToken,
+  sendVerificationEmail,
+} = require("../services/emailService");
 
 if (
   process.env.CLOUDINARY_CLOUD_NAME &&
@@ -48,26 +52,25 @@ async function signUp(req, res) {
   }
 
   const hash = await bcrypt.hash(password, 10);
+  const verificationToken = generateVerificationToken();
+  const expiresAt = new Date();
+  expiresAt.setHours(expiresAt.getHours() + 24);
+
   const user = await User.create({
     username,
     displayName,
     email: email.toLowerCase(),
     password: hash,
+    emailVerified: false,
+    emailVerificationToken: verificationToken,
+    emailVerificationExpires: expiresAt,
   });
 
-  const token = signAccessToken(user);
-  const refreshToken = signRefreshToken(user);
+  await sendVerificationEmail(user.email, verificationToken);
+
   res.status(201).json({
-    token,
-    refreshToken,
-    user: {
-      id: user._id,
-      username: user.username,
-      displayName: user.displayName,
-      avatar: user.avatar,
-      email: user.email,
-      role: user.role,
-    },
+    message: "Check your email to verify your account",
+    emailSent: true,
   });
 }
 
@@ -80,6 +83,13 @@ async function signIn(req, res) {
   const user = await User.findOne({ username: String(username).trim() });
   if (!user || user.accountStatus !== "active") {
     return res.status(401).json({ error: "Invalid credentials" });
+  }
+
+  if (user.emailVerified === false && user.role !== "admin") {
+    return res.status(403).json({
+      error: "Email not verified",
+      code: "EMAIL_NOT_VERIFIED",
+    });
   }
 
   const ok = await bcrypt.compare(password, user.password);
@@ -212,4 +222,45 @@ async function updateProfile(req, res) {
   });
 }
 
-module.exports = { signUp, signIn, refresh, me, updateProfile };
+async function verifyEmail(req, res) {
+  const { token } = req.query;
+  if (!token || typeof token !== "string") {
+    return res.status(400).json({ error: "Missing or invalid token" });
+  }
+
+  const user = await User.findOne({
+    emailVerificationToken: token.trim(),
+    emailVerificationExpires: { $gt: new Date() },
+  });
+
+  if (!user) {
+    return res.status(400).json({
+      error: "Invalid or expired verification link",
+      code: "VERIFICATION_FAILED",
+    });
+  }
+
+  user.emailVerified = true;
+  user.emailVerificationToken = undefined;
+  user.emailVerificationExpires = undefined;
+  await user.save();
+
+  const accessToken = signAccessToken(user);
+  const refreshToken = signRefreshToken(user);
+
+  res.json({
+    success: true,
+    token: accessToken,
+    refreshToken,
+    user: {
+      id: user._id,
+      username: user.username,
+      displayName: user.displayName,
+      avatar: user.avatar,
+      email: user.email,
+      role: user.role,
+    },
+  });
+}
+
+module.exports = { signUp, signIn, refresh, me, updateProfile, verifyEmail };

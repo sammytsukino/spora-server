@@ -64,6 +64,8 @@ const floraSchema = new mongoose.Schema(
     publishedAt: { type: Date },
     sealedAt: { type: Date },
     thumbnailUrl: { type: String },
+    deletedAt: { type: Date },
+    isDeleted: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
