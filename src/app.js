@@ -8,6 +8,8 @@ const authRoutes = require("./routes/auth");
 const floraRoutes = require("./routes/floras");
 const reportRoutes = require("./routes/reports");
 const adminRoutes = require("./routes/admin");
+const followRoutes = require("./routes/follows");
+const userRoutes = require("./routes/users");
 const { notFound, errorHandler } = require("./middleware/error");
 
 const app = express();
@@ -25,6 +27,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/floras", floraRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/follows", followRoutes);
+app.use("/api/users", userRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

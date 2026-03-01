@@ -1,5 +1,6 @@
 const { v2: cloudinary } = require("cloudinary");
 const Flora = require("../models/Flora");
+const Follow = require("../models/Follow");
 
 if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
   cloudinary.config({
@@ -35,7 +36,7 @@ function buildFloraPayload(user, body) {
 }
 
 async function listFloras(req, res) {
-  const { status, authorId, generation } = req.query;
+  const { status, authorId, generation, followingOnly } = req.query;
   const filter = { isDeleted: { $ne: true } };
   if (status) {
     filter.status = status;
@@ -47,6 +48,18 @@ async function listFloras(req, res) {
   }
   if (generation !== undefined) {
     filter["lineage.generation"] = Number(generation);
+  }
+
+  if (followingOnly === "true" || followingOnly === true) {
+    if (!req.user) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+    const follows = await Follow.find({ followerId: req.user._id }).select("followingId").lean();
+    const followedIds = follows.map((f) => f.followingId);
+    if (followedIds.length === 0) {
+      return res.json([]);
+    }
+    filter.authorId = { $in: followedIds };
   }
 
   const floras = await Flora.find(filter).sort({ createdAt: -1 }).limit(200);

@@ -24,14 +24,12 @@ const AdminLog = require('./models/AdminLog');
 const app = express();
 connectDB();
 
-// Middlewares
 app.use(helmet());
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
-// Constantes de expiración (buenas prácticas: access corto, refresh largo)
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY = '7d';
 
@@ -51,7 +49,6 @@ function signRefreshToken(user) {
   );
 }
 
-// Middleware de autenticación (acepta solo access tokens)
 async function requireAuth(req, res, next) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
@@ -75,7 +72,6 @@ async function requireAuth(req, res, next) {
   }
 }
 
-// Middleware de roles
 function requireRole(...roles) {
   return (req, res, next) => {
     const userRole = req.user?.role;
@@ -86,14 +82,20 @@ function requireRole(...roles) {
   };
 }
 
-// ============== RUTAS ==============
-
-// Health check
 app.get('/api/health', (req, res) => {
   res.json({ ok: true });
 });
 
-// ====== AUTH ======
+const userRoutes = require('./src/routes/users');
+app.use('/api/users', userRoutes);
+
+const { follow, unfollow, getFollowingIds, checkFollowStatus } = require('./src/controllers/followController');
+const authMiddleware = require('./src/middleware/auth');
+app.get('/api/follows/me/following', authMiddleware.requireAuth, getFollowingIds);
+app.post('/api/follows/:userId', authMiddleware.requireAuth, follow);
+app.delete('/api/follows/:userId', authMiddleware.requireAuth, unfollow);
+app.get('/api/follows/:userId/status', authMiddleware.requireAuth, checkFollowStatus);
+
 const { generateVerificationToken, sendVerificationEmail, sendVerificationEmailToUser } = require('./src/services/emailService');
 
 app.post('/api/auth/signup', async (req, res) => {
@@ -383,14 +385,26 @@ app.post('/api/auth/me/unsign', requireAuth, async (req, res) => {
   res.json({ florasAnonymized: result.modifiedCount });
 });
 
-// ====== FLORAS ======
-app.get('/api/floras', async (req, res) => {
-  const { limit = 50, skip = 0, author, authorId, status, includeHidden } = req.query;
+const { optionalAuth } = require('./src/middleware/auth');
+const Follow = require('./src/models/Follow');
+
+app.get('/api/floras', optionalAuth, async (req, res) => {
+  const { limit = 50, skip = 0, author, authorId, status, includeHidden, followingOnly } = req.query;
   const filter = { isDeleted: { $ne: true } };
   if (includeHidden !== 'true') filter.isHidden = false;
   const authorFilter = authorId || author;
   if (authorFilter) filter.author = authorFilter;
   if (status) filter.status = status;
+
+  if (followingOnly === 'true' || followingOnly === true) {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Sign in to see floras from people you follow' });
+    }
+    const follows = await Follow.find({ followerId: req.user._id }).select('followingId').lean();
+    const followedIds = follows.map((f) => f.followingId);
+    if (followedIds.length === 0) return res.json([]);
+    filter.author = { $in: followedIds };
+  }
 
   const floras = await Flora.find(filter)
     .populate('author', 'username displayName')
@@ -504,8 +518,6 @@ app.delete('/api/floras/:id', requireAuth, requireRole('cultivator', 'admin'), a
   await Flora.findByIdAndDelete(req.params.id);
   res.sendStatus(204);
 });
-
-// ====== REPORTS ======
 app.post('/api/reports', requireAuth, async (req, res) => {
   const { reportedFloraId, category, reason, description } = req.body;
   if (!reportedFloraId || !category || !reason) {
@@ -538,7 +550,6 @@ app.post('/api/reports', requireAuth, async (req, res) => {
   }
 });
 
-// ====== ADMIN ======
 app.get('/api/admin/floras', requireAuth, requireRole('admin'), async (req, res) => {
   const { limit = 100, skip = 0, status, hidden } = req.query;
   const filter = { isDeleted: { $ne: true } };
@@ -936,7 +947,6 @@ app.patch('/api/admin/floras/:id/status', requireAuth, requireRole('admin'), asy
   res.json(populated);
 });
 
-// Manejo de errores
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
@@ -946,7 +956,6 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// Servidor
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

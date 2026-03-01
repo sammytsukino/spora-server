@@ -6,11 +6,11 @@ const {
   updateFlora,
   deleteFlora,
 } = require("../controllers/floraController");
-const { requireAuth, requireRole } = require("../middleware/auth");
+const { requireAuth, requireRole, optionalAuth } = require("../middleware/auth");
 
 const router = express.Router();
 
-router.get("/", listFloras);
+router.get("/", optionalAuth, listFloras);
 router.get("/:id", getFlora);
 router.post("/", requireAuth, requireRole("cultivator", "admin"), createFlora);
 router.patch("/:id", requireAuth, requireRole("cultivator", "admin"), updateFlora);

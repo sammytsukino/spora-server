@@ -34,4 +34,21 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { requireAuth, requireRole };
+async function optionalAuth(req, res, next) {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith("Bearer ")) {
+    return next();
+  }
+  const token = header.replace("Bearer ", "").trim();
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    if (payload.type === "refresh") return next();
+    const user = await User.findById(payload.sub);
+    if (user && user.accountStatus === "active") req.user = user;
+  } catch {
+    // ignore invalid token
+  }
+  next();
+}
+
+module.exports = { requireAuth, requireRole, optionalAuth };
