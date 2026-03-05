@@ -102,6 +102,17 @@ async function createFlora(req, res) {
   }
 
   const flora = await Flora.create(payload);
+
+  if (payload.lineage?.parentFloraId) {
+    try {
+      await Flora.findByIdAndUpdate(payload.lineage.parentFloraId, {
+        $inc: { "lineage.childrenCount": 1 },
+      });
+    } catch (err) {
+      console.warn("Failed to update parent flora childrenCount:", err?.message || err);
+    }
+  }
+
   res.status(201).json(flora);
 }
 

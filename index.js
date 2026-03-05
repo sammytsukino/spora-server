@@ -17,7 +17,7 @@ if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && proce
   });
 }
 const User = require('./models/User');
-const Flora = require('./models/Flora');
+const Flora = require('./src/models/Flora');
 const Report = require('./models/Report');
 const AdminLog = require('./models/AdminLog');
 
@@ -378,7 +378,7 @@ app.post('/api/auth/me/unsign', requireAuth, async (req, res) => {
   await user.save();
 
   const result = await Flora.updateMany(
-    { author: user._id },
+    { authorId: user._id },
     { $set: { authorUsername: '[forbidden_author]', isAuthorAnonymized: true } }
   );
 
@@ -389,12 +389,13 @@ const { optionalAuth } = require('./src/middleware/auth');
 const Follow = require('./src/models/Follow');
 
 app.get('/api/floras', optionalAuth, async (req, res) => {
-  const { limit = 50, skip = 0, author, authorId, status, includeHidden, followingOnly } = req.query;
+  const { limit = 50, skip = 0, author, authorId, status, generation, includeHidden, followingOnly } = req.query;
   const filter = { isDeleted: { $ne: true } };
   if (includeHidden !== 'true') filter.isHidden = false;
   const authorFilter = authorId || author;
-  if (authorFilter) filter.author = authorFilter;
+  if (authorFilter) filter.authorId = authorFilter;
   if (status) filter.status = status;
+  if (generation !== undefined) filter['lineage.generation'] = Number(generation);
 
   if (followingOnly === 'true' || followingOnly === true) {
     if (!req.user) {
@@ -403,11 +404,11 @@ app.get('/api/floras', optionalAuth, async (req, res) => {
     const follows = await Follow.find({ followerId: req.user._id }).select('followingId').lean();
     const followedIds = follows.map((f) => f.followingId);
     if (followedIds.length === 0) return res.json([]);
-    filter.author = { $in: followedIds };
+    filter.authorId = { $in: followedIds };
   }
 
   const floras = await Flora.find(filter)
-    .populate('author', 'username displayName')
+    .populate('authorId', 'username displayName')
     .sort({ createdAt: -1 })
     .limit(parseInt(limit))
     .skip(parseInt(skip))
@@ -416,7 +417,7 @@ app.get('/api/floras', optionalAuth, async (req, res) => {
   const normalized = floras.map((f) => {
     const authorName = f.isAuthorAnonymized || f.authorUsername
       ? (f.authorUsername || '@Anonymous')
-      : (f.author?.username ? (f.author.username.startsWith('@') ? f.author.username : `@${f.author.username}`) : '@Anonymous');
+      : (f.authorId?.username ? (f.authorId.username.startsWith('@') ? f.authorId.username : `@${f.authorId.username}`) : '@Anonymous');
     return { ...f, authorUsername: authorName };
   });
 
@@ -424,8 +425,8 @@ app.get('/api/floras', optionalAuth, async (req, res) => {
 });
 
 app.get('/api/floras/:id', async (req, res) => {
-  const flora = await Flora.findOne({ _id: req.params.id, isHidden: false, isDeleted: { $ne: true } })
-    .populate('author', 'username displayName');
+  const flora = await Flora.findOne({ _id: req.params.id, isHidden: { $ne: true }, isDeleted: { $ne: true } })
+    .populate('authorId', 'username displayName');
   if (!flora) {
     return res.status(404).json({ error: 'Flora not found' });
   }
@@ -433,7 +434,7 @@ app.get('/api/floras/:id', async (req, res) => {
 });
 
 app.post('/api/floras', requireAuth, requireRole('cultivator', 'admin'), async (req, res) => {
-  const { title, text, status, generative, thumbnailData } = req.body;
+  const { title, text, status, generative, lineage, coAuthors, license, thumbnailData } = req.body;
   if (!title || !text) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
@@ -452,19 +453,42 @@ app.post('/api/floras', requireAuth, requireRole('cultivator', 'admin'), async (
     }
   }
 
-  try {
-    const flora = await Flora.create({
-      title,
-      text,
-      author: req.user._id,
-      status: status || 'budding',
-      generative,
-      ...(thumbnailUrl && { thumbnailUrl }),
-    });
+  const payload = {
+    title,
+    text,
+    authorId: req.user._id,
+    authorUsername: req.user.username,
+    isAuthorAnonymized: false,
+    coAuthors: Array.isArray(coAuthors) ? coAuthors : [],
+    lineage: lineage || { generation: 0, childrenCount: 0 },
+    status: status === 'sealed' ? 'sealed' : (status || 'blossoming'),
+    isHidden: false,
+    generative: generative || {},
+    license: license || {},
+    ...(thumbnailUrl && { thumbnailUrl }),
+  };
 
-    const populated = await Flora.findById(flora._id)
-      .populate('author', 'username displayName');
-    res.status(201).json(populated);
+  if (payload.status === 'sealed') {
+    payload.publishedAt = new Date();
+    payload.sealedAt = new Date();
+  } else {
+    payload.publishedAt = new Date();
+  }
+
+  try {
+    const flora = await Flora.create(payload);
+
+    if (payload.lineage?.parentFloraId) {
+      try {
+        await Flora.findByIdAndUpdate(payload.lineage.parentFloraId, {
+          $inc: { 'lineage.childrenCount': 1 },
+        });
+      } catch (updateErr) {
+        console.warn('Failed to update parent childrenCount:', updateErr.message);
+      }
+    }
+
+    res.status(201).json(flora);
   } catch (err) {
     console.error('Flora create error:', err);
     if (err.name === 'ValidationError') {
@@ -481,7 +505,7 @@ app.patch('/api/floras/:id', requireAuth, requireRole('cultivator', 'admin'), as
     return res.status(404).json({ error: 'Flora not found' });
   }
 
-  if (flora.author.toString() !== req.user._id.toString()) {
+  if (flora.authorId?.toString() !== req.user._id.toString()) {
     return res.status(403).json({ error: 'Not authorized to edit this flora' });
   }
 
@@ -494,9 +518,7 @@ app.patch('/api/floras/:id', requireAuth, requireRole('cultivator', 'admin'), as
 
   try {
     await flora.save();
-    const populated = await Flora.findById(flora._id)
-      .populate('author', 'username displayName');
-    res.json(populated);
+    res.json(flora);
   } catch (err) {
     if (err.name === 'ValidationError') {
       return res.status(400).json({ error: err.message });
@@ -511,7 +533,7 @@ app.delete('/api/floras/:id', requireAuth, requireRole('cultivator', 'admin'), a
     return res.status(404).json({ error: 'Flora not found' });
   }
 
-  if (flora.author.toString() !== req.user._id.toString()) {
+  if (flora.authorId?.toString() !== req.user._id.toString()) {
     return res.status(403).json({ error: 'Not authorized to delete this flora' });
   }
 
@@ -558,7 +580,7 @@ app.get('/api/admin/floras', requireAuth, requireRole('admin'), async (req, res)
   if (hidden === 'false') filter.isHidden = false;
 
   const floras = await Flora.find(filter)
-    .populate('author', 'username displayName')
+    .populate('authorId', 'username displayName')
     .sort({ createdAt: -1 })
     .limit(parseInt(limit))
     .skip(parseInt(skip))
@@ -567,7 +589,7 @@ app.get('/api/admin/floras', requireAuth, requireRole('admin'), async (req, res)
   const withAuthorDisplay = floras.map((f) => {
     const authorName = f.isAuthorAnonymized || f.authorUsername
       ? (f.authorUsername || '@Anonymous')
-      : (f.author?.username ? (f.author.username.startsWith('@') ? f.author.username : `@${f.author.username}`) : '@Anonymous');
+      : (f.authorId?.username ? (f.authorId.username.startsWith('@') ? f.authorId.username : `@${f.authorId.username}`) : '@Anonymous');
     return { ...f, authorUsername: authorName };
   });
 
@@ -740,7 +762,7 @@ app.get('/api/admin/users', requireAuth, requireRole('admin'), async (req, res) 
 
   const usersWithCounts = await Promise.all(
     users.map(async (u) => {
-      const florasCount = await Flora.countDocuments({ author: u._id });
+      const florasCount = await Flora.countDocuments({ authorId: u._id });
       return { ...u, florasCount };
     })
   );
@@ -807,7 +829,7 @@ app.post('/api/admin/users/:id/unsign', requireAuth, requireRole('admin'), async
   }
 
   const result = await Flora.updateMany(
-    { author: user._id },
+    { authorId: user._id },
     { $set: { authorUsername: '@Anonymous', isAuthorAnonymized: true } }
   );
 
