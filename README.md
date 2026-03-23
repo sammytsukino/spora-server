@@ -245,7 +245,14 @@ PORT=4000
 MONGO_URL=mongodb://localhost:27017/sporadb
 JWT_SECRET=your_secret_here
 CORS_ORIGIN=http://localhost:5173
+
+# Optional: Flora Reader text-to-speech (ElevenLabs). Without these, POST /api/reader/tts returns 503.
+# ELEVENLABS_API_KEY=
+# ELEVENLABS_VOICE_ID=
+# ELEVENLABS_MODEL_ID=eleven_multilingual_v2
 ```
+
+See also `.env.example` in this repo for a fuller template.
 
 **Instructions:**
 - Copy the example above into a file named `.env` at the root of this repository.
