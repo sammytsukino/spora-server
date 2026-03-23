@@ -10,6 +10,7 @@ const {
   listReports,
   updateReport,
   listFlagged,
+  listAdminFloras,
   updateFloraStatus,
   batchUpdateFloras,
   batchUpdateReports,
@@ -33,6 +34,7 @@ router.get("/reports", listReports);
 router.patch("/reports/:id", updateReport);
 
 router.get("/flagged", listFlagged);
+router.get("/floras", listAdminFloras);
 router.patch("/floras/:id/status", updateFloraStatus);
 router.patch("/floras/batch", batchUpdateFloras);
 router.patch("/reports/batch", batchUpdateReports);

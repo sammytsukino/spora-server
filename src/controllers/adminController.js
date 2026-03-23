@@ -311,6 +311,35 @@ async function listFlagged(req, res) {
   res.json(florasWithReports);
 }
 
+async function listAdminFloras(req, res) {
+  const { limit = 100, skip = 0, status, hidden } = req.query;
+  const filter = { isDeleted: { $ne: true } };
+  if (status) filter.status = status;
+  if (hidden === "true") filter.isHidden = true;
+  if (hidden === "false") filter.isHidden = false;
+
+  const floras = await Flora.find(filter)
+    .populate("authorId", "username displayName")
+    .sort({ createdAt: -1 })
+    .limit(parseInt(String(limit), 10) || 100)
+    .skip(parseInt(String(skip), 10) || 0)
+    .lean();
+
+  const withAuthorDisplay = floras.map((f) => {
+    const authorName =
+      f.isAuthorAnonymized || f.authorUsername
+        ? f.authorUsername || "@Anonymous"
+        : f.authorId?.username
+          ? f.authorId.username.startsWith("@")
+            ? f.authorId.username
+            : `@${f.authorId.username}`
+          : "@Anonymous";
+    return { ...f, authorUsername: authorName };
+  });
+
+  res.json(withAuthorDisplay);
+}
+
 async function updateFloraStatus(req, res) {
   const flora = await Flora.findById(req.params.id);
   if (!flora) {
@@ -482,6 +511,7 @@ module.exports = {
   listReports,
   updateReport,
   listFlagged,
+  listAdminFloras,
   updateFloraStatus,
   batchUpdateFloras,
   batchUpdateReports,

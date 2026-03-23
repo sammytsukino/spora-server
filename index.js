@@ -921,7 +921,7 @@ app.get('/api/admin/flagged', requireAuth, requireRole('admin'), async (req, res
     _id: { $in: flaggedFloraIds },
     isDeleted: { $ne: true },
   })
-    .populate('author', 'username displayName')
+    .populate('authorId', 'username displayName')
     .sort({ createdAt: -1 })
     .limit(parseInt(limit))
     .skip(parseInt(skip));
@@ -965,7 +965,7 @@ app.patch('/api/admin/floras/:id/status', requireAuth, requireRole('admin'), asy
   });
 
   const populated = await Flora.findById(flora._id)
-    .populate('author', 'username displayName');
+    .populate('authorId', 'username displayName');
   res.json(populated);
 });
 
