@@ -1,8 +1,5 @@
 #!/usr/bin/env node
-/**
- * Mark all admin users as email verified.
- * Usage: node scripts/verify-all-admins.js
- */
+
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 const { connectDB } = require('../db');
 const User = require('../models/User');

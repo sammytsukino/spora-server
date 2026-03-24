@@ -1,6 +1,6 @@
 const Flora = require("../models/Flora");
 
-/** ElevenLabs TTS proxy for Flora Reader (API key stays server-side). Max ~6k chars per request. */
+
 async function postReaderTts(req, res) {
   const apiKey = process.env.ELEVENLABS_API_KEY?.trim();
   const voiceId = process.env.ELEVENLABS_VOICE_ID?.trim();
@@ -45,7 +45,7 @@ async function postReaderTts(req, res) {
     const n = parseFloat(rawSpeed);
     if (Number.isFinite(n)) speed = n;
   }
-  // ElevenLabs: 1.0 = default; lower = slower, higher = faster (typical safe band for reading)
+  
   speed = Math.min(1.35, Math.max(0.65, speed));
 
   let elRes;

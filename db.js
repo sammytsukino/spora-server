@@ -1,9 +1,18 @@
 const mongoose = require('mongoose');
 
+function getMongoUri() {
+  const fromEnv = process.env.MONGODB_URI?.trim() || process.env.MONGO_URL?.trim();
+  if (fromEnv) return fromEnv;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('MONGODB_URI or MONGO_URL is required in production');
+  }
+  return 'mongodb://localhost:27017/sporadb';
+}
+
 async function connectDB() {
-  await mongoose.connect(process.env.MONGO_URL || 'mongodb://localhost:27017/sporadb')
-    .then(() => console.log('MongoDB connected!'))
-    .catch((err) => console.log('MongoDB connection error:', err));
+  const uri = getMongoUri();
+  await mongoose.connect(uri);
+  console.log('MongoDB connected!');
 }
 
 module.exports = { connectDB };

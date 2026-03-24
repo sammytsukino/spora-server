@@ -45,9 +45,7 @@ async function optionalAuth(req, res, next) {
     if (payload.type === "refresh") return next();
     const user = await User.findById(payload.sub);
     if (user && user.accountStatus === "active") req.user = user;
-  } catch {
-    // ignore invalid token
-  }
+  } catch {}
   next();
 }
 

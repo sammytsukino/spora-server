@@ -4,10 +4,35 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cloudinary = require('cloudinary').v2;
 const { connectDB } = require('./db');
+
+function validateStartupEnv() {
+  const secret = process.env.JWT_SECRET?.trim();
+  if (!secret || secret.length < 32) {
+    console.error('FATAL: JWT_SECRET must be set and at least 32 characters long.');
+    process.exit(1);
+  }
+  if (process.env.NODE_ENV === 'production') {
+    const mongo = (process.env.MONGODB_URI || process.env.MONGO_URL || '').trim();
+    if (!mongo) {
+      console.error('FATAL: MONGODB_URI or MONGO_URL is required in production.');
+      process.exit(1);
+    }
+    const corsOrigin = (process.env.CORS_ORIGIN || '').trim();
+    const corsParts = corsOrigin.split(',').map((s) => s.trim()).filter(Boolean);
+    if (corsParts.length === 0 || corsParts.some((o) => o === '*')) {
+      console.error(
+        'FATAL: CORS_ORIGIN must be set in production to your frontend origin(s), not *. Use commas for several URLs.'
+      );
+      process.exit(1);
+    }
+  }
+}
+validateStartupEnv();
 
 if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
   cloudinary.config({
@@ -22,10 +47,60 @@ const Report = require('./models/Report');
 const AdminLog = require('./models/AdminLog');
 
 const app = express();
-connectDB();
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
+function parseCorsOriginList() {
+  return (process.env.CORS_ORIGIN || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function resolveCorsOrigin(origin, callback) {
+  const isProd = process.env.NODE_ENV === 'production';
+  const allowedList = parseCorsOriginList();
+
+  if (isProd) {
+    if (allowedList.length === 0 || allowedList.includes('*')) {
+      return callback(null, false);
+    }
+    if (!origin) {
+      return callback(null, false);
+    }
+    if (allowedList.includes(origin)) {
+      return callback(null, origin);
+    }
+    return callback(null, false);
+  }
+
+  
+  if (!origin) {
+    return callback(null, true);
+  }
+  if (allowedList.includes(origin)) {
+    return callback(null, origin);
+  }
+  try {
+    const { hostname } = new URL(origin);
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return callback(null, true);
+    }
+  } catch (_) {}
+  return callback(null, true);
+}
 
 app.use(helmet());
-app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
+app.use(cors({ origin: resolveCorsOrigin }));
+
+const readerTtsLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many listen requests. Try again shortly.' },
+});
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
@@ -216,15 +291,18 @@ app.post('/api/auth/resend-verification', async (req, res) => {
   if (!email || typeof email !== 'string') {
     return res.status(400).json({ error: 'Email required' });
   }
-  const user = await User.findOne({ email: email.toLowerCase().trim() });
+  const normalized = email.toLowerCase().trim();
+  const user = await User.findOne({ email: normalized });
+  const genericMessage =
+    'If an account exists for that email and it is not yet verified, we sent a verification link. Check your inbox and spam folder.';
   if (!user) {
-    return res.status(404).json({ error: 'No account found with that email' });
+    return res.json({ message: genericMessage });
   }
   if (user.emailVerified) {
-    return res.status(400).json({ error: 'Email already verified. You can sign in.' });
+    return res.json({ message: genericMessage });
   }
   await sendVerificationEmailToUser(user);
-  res.json({ message: 'Verification email sent. Check your inbox and spam folder.' });
+  res.json({ message: genericMessage });
 });
 
 app.post('/api/auth/signin', async (req, res) => {
@@ -433,8 +511,8 @@ app.get('/api/floras/:id', async (req, res) => {
   res.json(flora);
 });
 
-/** ElevenLabs TTS proxy for Flora Reader (API key stays server-side). Max ~6k chars per request. */
-app.post('/api/reader/tts', async (req, res) => {
+
+app.post('/api/reader/tts', readerTtsLimiter, async (req, res) => {
   const apiKey = process.env.ELEVENLABS_API_KEY?.trim();
   const voiceId = process.env.ELEVENLABS_VOICE_ID?.trim();
   if (!apiKey || !voiceId) {
@@ -709,6 +787,77 @@ app.patch('/api/admin/floras/batch', requireAuth, requireRole('admin'), async (r
         action: `flora_batch_${action}`,
         targetType: 'flora',
         targetId: flora._id,
+        reason: action,
+      });
+    } catch {
+      results.failed.push(id);
+    }
+  }
+  res.json(results);
+});
+
+app.patch('/api/admin/reports/batch', requireAuth, requireRole('admin'), async (req, res) => {
+  const { ids = [], action } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0 || !action) {
+    return res.status(400).json({ error: 'Missing ids or action' });
+  }
+  if (!['resolve', 'dismiss'].includes(action)) {
+    return res.status(400).json({ error: 'Invalid action' });
+  }
+  const status = action === 'resolve' ? 'resolved' : 'dismissed';
+  const results = { updated: 0, failed: [] };
+  for (const id of ids) {
+    try {
+      const report = await Report.findById(id);
+      if (!report) {
+        results.failed.push(id);
+        continue;
+      }
+      report.status = status;
+      report.reviewedBy = req.user._id;
+      report.reviewedAt = new Date();
+      await report.save();
+      results.updated++;
+      await AdminLog.create({
+        admin: req.user._id,
+        action: `report_batch_${action}`,
+        targetType: 'report',
+        targetId: report._id,
+        reason: action,
+      });
+    } catch {
+      results.failed.push(id);
+    }
+  }
+  res.json(results);
+});
+
+app.patch('/api/admin/users/batch', requireAuth, requireRole('admin'), async (req, res) => {
+  const { ids = [], action } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0 || !action) {
+    return res.status(400).json({ error: 'Missing ids or action' });
+  }
+  if (!['suspend', 'ban', 'activate'].includes(action)) {
+    return res.status(400).json({ error: 'Invalid action' });
+  }
+  const statusMap = { suspend: 'suspended', ban: 'deleted', activate: 'active' };
+  const nextStatus = statusMap[action];
+  const results = { updated: 0, failed: [] };
+  for (const id of ids) {
+    try {
+      const targetUser = await User.findById(id);
+      if (!targetUser) {
+        results.failed.push(id);
+        continue;
+      }
+      targetUser.accountStatus = nextStatus;
+      await targetUser.save();
+      results.updated++;
+      await AdminLog.create({
+        admin: req.user._id,
+        action: `user_batch_${action}`,
+        targetType: 'user',
+        targetId: targetUser._id,
         reason: action,
       });
     } catch {
@@ -1058,6 +1207,18 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+connectDB()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+      if (!process.env.ELEVENLABS_API_KEY?.trim() || !process.env.ELEVENLABS_VOICE_ID?.trim()) {
+        console.log(
+          '[reader/tts] ElevenLabs not configured: set ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID in .env'
+        );
+      }
+    });
+  })
+  .catch((err) => {
+    console.error('Failed to connect to MongoDB', err);
+    process.exit(1);
+  });

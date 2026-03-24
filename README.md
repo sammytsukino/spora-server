@@ -230,7 +230,7 @@ npm run dev
 
 **Frontend (.env):**
 ```
-VITE_API_URL=http://localhost:4000/api
+VITE_API_BASE_URL=http://localhost:4000/api
 ```
 
 
@@ -242,10 +242,17 @@ You must create your own `.env` file in the root of the backend project (`spora-
 Example content for `.env`:
 ```
 PORT=4000
-MONGO_URL=mongodb://localhost:27017/sporadb
-JWT_SECRET=your_secret_here
+# MongoDB: either MONGODB_URI or MONGO_URL (both supported)
+MONGODB_URI=mongodb://localhost:27017/sporadb
+JWT_SECRET=use_a_long_random_string_at_least_32_chars
 CORS_ORIGIN=http://localhost:5173
+FRONTEND_URL=http://localhost:5173
 
+# Production: set NODE_ENV=production, use a real MongoDB URI, set CORS_ORIGIN to your deployed
+# frontend origin (not *), and use a strong JWT_SECRET.
+
+# Optional: SMTP for verification emails (see .env.example)
+# Optional: Cloudinary for uploads (see .env.example)
 # Optional: Flora Reader text-to-speech (ElevenLabs). Without these, POST /api/reader/tts returns 503.
 # ELEVENLABS_API_KEY=
 # ELEVENLABS_VOICE_ID=
@@ -256,7 +263,7 @@ See also `.env.example` in this repo for a fuller template.
 
 **Instructions:**
 - Copy the example above into a file named `.env` at the root of this repository.
-- Change the values as needed for your environment (especially `JWT_SECRET`).
+- Change the values as needed for your environment. **`JWT_SECRET` must be at least 32 characters** (the server exits on startup if it is shorter or missing).
 - **Never share your `.env` file or commit it to public repositories.**
 
 ⟡ ═════════════════════════════════════════ ⟡
@@ -277,13 +284,18 @@ spora-client/
 ```
 
 **Backend Repository (spora-server):**
+
+**Process entry:** `npm start` and `npm run dev` run **`index.js`** at the repo root (not `src/server.js`). The `src/app.js` / `src/server.js` stack is an alternate modular layout that is not wired to the default scripts.
+
 ```
 spora-server/
+├── index.js                      # Server entry point (npm start)
+├── db.js                         # MongoDB connection (used by index.js)
 ├── src/
-│   ├── app.js                    # Express app configuration
-│   ├── server.js                 # Server entry point
+│   ├── app.js                    # Alternate Express app (not default entry)
+│   ├── server.js                 # Alternate entry (not used by npm start)
 │   ├── config/
-│   │   └── db.js                 # MongoDB connection
+│   │   └── db.js                 # MongoDB helper for alternate stack
 │   ├── models/                   # Mongoose schemas
 │   │   ├── User.js               # User model (auth, roles)
 │   │   ├── Flora.js              # Flora model (text + generative data)
