@@ -9,6 +9,7 @@ async function createReport(req, res) {
   const report = await Report.create({
     reportedFloraId,
     reportedBy: req.user._id,
+    source: "user",
     reason,
     category,
     description,

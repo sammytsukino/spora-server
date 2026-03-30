@@ -7,7 +7,12 @@ const reportSchema = new mongoose.Schema(
     reason: { type: String },
     category: {
       type: String,
-      enum: ["spam", "inappropriate", "copyright", "harassment"],
+      enum: ["spam", "inappropriate", "copyright", "harassment", "language_review"],
+    },
+    source: {
+      type: String,
+      enum: ["user", "language_screen"],
+      default: "user",
     },
     description: { type: String },
     status: {

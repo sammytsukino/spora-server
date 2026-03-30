@@ -44,6 +44,8 @@ if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && proce
 const User = require('./models/User');
 const Flora = require('./src/models/Flora');
 const Report = require('./models/Report');
+const { scanSensitiveLanguage } = require('./src/lib/scanSensitiveLanguage');
+const { syncLanguageScreenReportWithModel } = require('./src/services/languageScreenReport');
 const AdminLog = require('./models/AdminLog');
 
 const app = express();
@@ -645,7 +647,29 @@ app.post('/api/floras', requireAuth, requireRole('cultivator', 'admin'), async (
       }
     }
 
-    res.status(201).json(flora);
+    const scan = scanSensitiveLanguage({ title: flora.title, text: flora.text });
+    const contentScreening = {
+      flagged: scan.matchedTerms.length > 0,
+      matchCount: scan.matchedTerms.length,
+      titleHits: scan.locations.title,
+      textHits: scan.locations.text,
+    };
+    if (contentScreening.flagged) {
+      contentScreening.matchedTerms = scan.matchedTerms;
+    }
+    try {
+      await syncLanguageScreenReportWithModel(
+        Report,
+        'reportedFlora',
+        flora._id,
+        flora.title,
+        flora.text
+      );
+    } catch (screenErr) {
+      console.warn('Language screen report sync failed:', screenErr?.message || screenErr);
+    }
+
+    res.status(201).json({ ...flora.toObject(), contentScreening });
   } catch (err) {
     console.error('Flora create error:', err);
     if (err.name === 'ValidationError') {
@@ -675,7 +699,28 @@ app.patch('/api/floras/:id', requireAuth, requireRole('cultivator', 'admin'), as
 
   try {
     await flora.save();
-    res.json(flora);
+    const scanPatch = scanSensitiveLanguage({ title: flora.title, text: flora.text });
+    const contentScreening = {
+      flagged: scanPatch.matchedTerms.length > 0,
+      matchCount: scanPatch.matchedTerms.length,
+      titleHits: scanPatch.locations.title,
+      textHits: scanPatch.locations.text,
+    };
+    if (contentScreening.flagged) {
+      contentScreening.matchedTerms = scanPatch.matchedTerms;
+    }
+    try {
+      await syncLanguageScreenReportWithModel(
+        Report,
+        'reportedFlora',
+        flora._id,
+        flora.title,
+        flora.text
+      );
+    } catch (screenErr) {
+      console.warn('Language screen report sync failed:', screenErr?.message || screenErr);
+    }
+    res.json({ ...flora.toObject(), contentScreening });
   } catch (err) {
     if (err.name === 'ValidationError') {
       return res.status(400).json({ error: err.message });
@@ -712,6 +757,7 @@ app.post('/api/reports', requireAuth, async (req, res) => {
     const report = await Report.create({
       reportedBy: req.user._id,
       reportedFlora: reportedFloraId,
+      source: 'user',
       category,
       reason,
       description,

@@ -1,6 +1,8 @@
 const { v2: cloudinary } = require("cloudinary");
 const Flora = require("../models/Flora");
 const Follow = require("../models/Follow");
+const { scanSensitiveLanguage } = require("../lib/scanSensitiveLanguage");
+const { syncLanguageScreenReport } = require("../services/languageScreenReport");
 
 if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
   cloudinary.config({
@@ -113,7 +115,23 @@ async function createFlora(req, res) {
     }
   }
 
-  res.status(201).json(flora);
+  const scan = scanSensitiveLanguage({ title: flora.title, text: flora.text });
+  const contentScreening = {
+    flagged: scan.matchedTerms.length > 0,
+    matchCount: scan.matchedTerms.length,
+    titleHits: scan.locations.title,
+    textHits: scan.locations.text,
+  };
+  if (contentScreening.flagged) {
+    contentScreening.matchedTerms = scan.matchedTerms;
+  }
+  try {
+    await syncLanguageScreenReport(flora._id, flora.title, flora.text);
+  } catch (err) {
+    console.warn("Language screen report sync failed:", err?.message || err);
+  }
+
+  res.status(201).json({ ...flora.toObject(), contentScreening });
 }
 
 async function updateFlora(req, res) {
@@ -148,7 +166,23 @@ async function updateFlora(req, res) {
   Object.assign(flora, updates);
   await flora.save();
 
-  res.json(flora);
+  const scanPatch = scanSensitiveLanguage({ title: flora.title, text: flora.text });
+  const contentScreeningPatch = {
+    flagged: scanPatch.matchedTerms.length > 0,
+    matchCount: scanPatch.matchedTerms.length,
+    titleHits: scanPatch.locations.title,
+    textHits: scanPatch.locations.text,
+  };
+  if (contentScreeningPatch.flagged) {
+    contentScreeningPatch.matchedTerms = scanPatch.matchedTerms;
+  }
+  try {
+    await syncLanguageScreenReport(flora._id, flora.title, flora.text);
+  } catch (err) {
+    console.warn("Language screen report sync failed:", err?.message || err);
+  }
+
+  res.json({ ...flora.toObject(), contentScreening: contentScreeningPatch });
 }
 
 async function deleteFlora(req, res) {

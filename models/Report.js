@@ -4,26 +4,31 @@ const reportSchema = new mongoose.Schema({
   reportedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: false,
   },
   reportedFlora: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Flora',
-    required: true
+    required: true,
   },
   category: {
     type: String,
-    enum: ['spam', 'harassment', 'inappropriate', 'other'],
-    required: true
+    enum: ['spam', 'harassment', 'inappropriate', 'other', 'language_review'],
+    required: true,
+  },
+  source: {
+    type: String,
+    enum: ['user', 'language_screen'],
+    default: 'user',
   },
   reason: {
     type: String,
     required: [true, 'Reason is required'],
-    maxlength: [100, 'Reason must not exceed 100 characters']
+    maxlength: [200, 'Reason must not exceed 200 characters'],
   },
   description: {
     type: String,
-    maxlength: [500, 'Description must not exceed 500 characters']
+    maxlength: [2000, 'Description must not exceed 2000 characters'],
   },
   status: {
     type: String,
