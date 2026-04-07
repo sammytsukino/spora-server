@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
+const cookieParser = require("cookie-parser");
 
 const authRoutes = require("./routes/auth");
 const floraRoutes = require("./routes/floras");
@@ -15,8 +16,18 @@ const { notFound, errorHandler } = require("./middleware/error");
 
 const app = express();
 
-app.use(helmet());
-app.use(cors({ origin: process.env.CORS_ORIGIN || "*" }));
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
+app.use(
+  cors({
+    origin: process.env.CORS_ORIGIN || true,
+    credentials: true,
+  })
+);
+app.use(cookieParser());
 app.use(express.json({ limit: "50mb" }));
 app.use(morgan("dev"));
 

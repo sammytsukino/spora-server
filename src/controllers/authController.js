@@ -3,6 +3,15 @@ const jwt = require("jsonwebtoken");
 const { v2: cloudinary } = require("cloudinary");
 const User = require("../models/User");
 const {
+  hashVerificationToken,
+  findUserForVerificationToken,
+} = require("../lib/verificationToken");
+const {
+  setRefreshTokenCookie,
+  clearRefreshTokenCookie,
+  getRefreshTokenFromRequest,
+} = require("../lib/refreshCookie");
+const {
   generateVerificationToken,
   sendVerificationEmail,
 } = require("../services/emailService");
@@ -53,6 +62,7 @@ async function signUp(req, res) {
 
   const hash = await bcrypt.hash(password, 10);
   const verificationToken = generateVerificationToken();
+  const verificationTokenHash = hashVerificationToken(verificationToken);
   const expiresAt = new Date();
   expiresAt.setHours(expiresAt.getHours() + 24);
 
@@ -62,7 +72,7 @@ async function signUp(req, res) {
     email: email.toLowerCase(),
     password: hash,
     emailVerified: false,
-    emailVerificationToken: verificationToken,
+    emailVerificationToken: verificationTokenHash,
     emailVerificationExpires: expiresAt,
   });
 
@@ -102,9 +112,9 @@ async function signIn(req, res) {
 
   const token = signAccessToken(user);
   const refreshToken = signRefreshToken(user);
+  setRefreshTokenCookie(res, refreshToken);
   res.json({
     token,
-    refreshToken,
     user: {
       id: user._id,
       username: user.username,
@@ -117,12 +127,12 @@ async function signIn(req, res) {
 }
 
 async function refresh(req, res) {
-  const { refreshToken } = req.body;
-  if (!refreshToken || typeof refreshToken !== "string") {
+  const refreshToken = getRefreshTokenFromRequest(req);
+  if (!refreshToken) {
     return res.status(400).json({ error: "Missing refresh token" });
   }
   try {
-    const payload = jwt.verify(refreshToken.trim(), process.env.JWT_SECRET);
+    const payload = jwt.verify(refreshToken, process.env.JWT_SECRET);
     if (payload.type !== "refresh") {
       return res.status(401).json({ error: "Invalid refresh token" });
     }
@@ -132,9 +142,9 @@ async function refresh(req, res) {
     }
     const token = signAccessToken(user);
     const newRefreshToken = signRefreshToken(user);
+    setRefreshTokenCookie(res, newRefreshToken);
     res.json({
       token,
-      refreshToken: newRefreshToken,
       user: {
         id: user._id,
         username: user.username,
@@ -147,6 +157,11 @@ async function refresh(req, res) {
   } catch {
     return res.status(401).json({ error: "Invalid refresh token" });
   }
+}
+
+async function logout(req, res) {
+  clearRefreshTokenCookie(res);
+  res.json({ ok: true });
 }
 
 async function me(req, res) {
@@ -228,10 +243,7 @@ async function verifyEmail(req, res) {
     return res.status(400).json({ error: "Missing or invalid token" });
   }
 
-  const user = await User.findOne({
-    emailVerificationToken: token.trim(),
-    emailVerificationExpires: { $gt: new Date() },
-  });
+  const user = await findUserForVerificationToken(token, User);
 
   if (!user) {
     return res.status(400).json({
@@ -247,11 +259,11 @@ async function verifyEmail(req, res) {
 
   const accessToken = signAccessToken(user);
   const refreshToken = signRefreshToken(user);
+  setRefreshTokenCookie(res, refreshToken);
 
   res.json({
     success: true,
     token: accessToken,
-    refreshToken,
     user: {
       id: user._id,
       username: user.username,
@@ -263,4 +275,12 @@ async function verifyEmail(req, res) {
   });
 }
 
-module.exports = { signUp, signIn, refresh, me, updateProfile, verifyEmail };
+module.exports = {
+  signUp,
+  signIn,
+  refresh,
+  logout,
+  me,
+  updateProfile,
+  verifyEmail,
+};

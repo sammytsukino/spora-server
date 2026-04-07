@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { hashVerificationToken } = require("../lib/verificationToken");
 
 let transporter = null;
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
@@ -71,7 +72,7 @@ async function sendVerificationEmailToUser(user) {
   const token = generateVerificationToken();
   const expiresAt = new Date();
   expiresAt.setHours(expiresAt.getHours() + 48);
-  user.emailVerificationToken = token;
+  user.emailVerificationToken = hashVerificationToken(token);
   user.emailVerificationExpires = expiresAt;
   await user.save();
   await sendVerificationEmail(user.email, token);

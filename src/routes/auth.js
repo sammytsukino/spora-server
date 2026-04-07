@@ -1,5 +1,13 @@
 const express = require("express");
-const { signUp, signIn, refresh, me, updateProfile, verifyEmail } = require("../controllers/authController");
+const {
+  signUp,
+  signIn,
+  refresh,
+  logout,
+  me,
+  updateProfile,
+  verifyEmail,
+} = require("../controllers/authController");
 const { requireAuth } = require("../middleware/auth");
 
 const router = express.Router();
@@ -12,6 +20,7 @@ router.post("/verify-email", (req, res, next) => {
 });
 router.post("/signin", signIn);
 router.post("/refresh", refresh);
+router.post("/logout", logout);
 router.get("/me", requireAuth, me);
 router.patch("/me", requireAuth, updateProfile);
 

@@ -106,7 +106,6 @@ describe("POST /api/auth/signin", () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
       token: expect.any(String),
-      refreshToken: expect.any(String),
       user: {
         id: expect.anything(),
         username: "u",
@@ -114,6 +113,10 @@ describe("POST /api/auth/signin", () => {
         role: "cultivator",
       },
     });
+    expect(res.body).not.toHaveProperty("refreshToken");
+    expect(res.headers["set-cookie"]).toEqual(
+      expect.arrayContaining([expect.stringMatching(/spora_refresh=/)]),
+    );
     expect(res.body.user).not.toHaveProperty("password");
   });
 });

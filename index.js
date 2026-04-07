@@ -5,8 +5,18 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const {
+  hashVerificationToken,
+  findUserForVerificationToken,
+} = require('./src/lib/verificationToken');
+const {
+  setRefreshTokenCookie,
+  clearRefreshTokenCookie,
+  getRefreshTokenFromRequest,
+} = require('./src/lib/refreshCookie');
 const cloudinary = require('cloudinary').v2;
 const { connectDB } = require('./db');
 
@@ -93,8 +103,49 @@ function resolveCorsOrigin(origin, callback) {
   return callback(null, true);
 }
 
-app.use(helmet());
-app.use(cors({ origin: resolveCorsOrigin }));
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
+app.use(cors({ origin: resolveCorsOrigin, credentials: true }));
+app.use(cookieParser());
+
+const authSignInLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many sign-in attempts. Try again later.' },
+});
+const authSignUpLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many sign-up attempts. Try again later.' },
+});
+const authVerifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many verification attempts. Try again later.' },
+});
+const authRefreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many refresh attempts. Try again later.' },
+});
+const authResendLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many resend requests. Try again later.' },
+});
 
 const readerTtsLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -175,7 +226,7 @@ app.get('/api/follows/:userId/status', authMiddleware.requireAuth, checkFollowSt
 
 const { generateVerificationToken, sendVerificationEmail, sendVerificationEmailToUser } = require('./src/services/emailService');
 
-app.post('/api/auth/signup', async (req, res) => {
+app.post('/api/auth/signup', authSignUpLimiter, async (req, res) => {
   const { username, displayName, email, password } = req.body;
   if (!username || !email || !password) {
     return res.status(400).json({ error: 'Missing fields' });
@@ -187,6 +238,7 @@ app.post('/api/auth/signup', async (req, res) => {
 
   const hash = await bcrypt.hash(password, 10);
   const verificationToken = generateVerificationToken();
+  const verificationTokenHash = hashVerificationToken(verificationToken);
   const expiresAt = new Date();
   expiresAt.setHours(expiresAt.getHours() + 48);
 
@@ -197,7 +249,7 @@ app.post('/api/auth/signup', async (req, res) => {
     }
     existing.displayName = displayName || existing.displayName;
     existing.password = hash;
-    existing.emailVerificationToken = verificationToken;
+    existing.emailVerificationToken = verificationTokenHash;
     existing.emailVerificationExpires = expiresAt;
     await existing.save();
     user = existing;
@@ -208,7 +260,7 @@ app.post('/api/auth/signup', async (req, res) => {
       email: email.toLowerCase(),
       password: hash,
       emailVerified: false,
-      emailVerificationToken: verificationToken,
+      emailVerificationToken: verificationTokenHash,
       emailVerificationExpires: expiresAt,
     });
   }
@@ -232,19 +284,19 @@ function normalizeToken(token) {
   return token.length > 0 ? token : null;
 }
 
-async function handleVerifyEmail(token) {
+async function handleVerifyEmail(token, res) {
   token = normalizeToken(token);
   if (!token) {
     return { status: 400, body: { error: 'Missing or invalid token' } };
   }
 
-  const user = await User.findOne({
-    emailVerificationToken: token,
-    emailVerificationExpires: { $gt: new Date() },
-  });
+  const user = await findUserForVerificationToken(token, User);
 
   if (!user) {
-    const expiredUser = await User.findOne({ emailVerificationToken: token });
+    const hash = hashVerificationToken(token);
+    const expiredByHash = await User.findOne({ emailVerificationToken: hash });
+    const expiredByPlain = await User.findOne({ emailVerificationToken: token });
+    const expiredUser = expiredByHash || expiredByPlain;
     if (expiredUser) {
       console.warn('[verify-email] Token expired for user:', expiredUser.email);
     } else {
@@ -260,12 +312,14 @@ async function handleVerifyEmail(token) {
 
   const accessToken = signAccessToken(user);
   const refreshToken = signRefreshToken(user);
+  if (res) {
+    setRefreshTokenCookie(res, refreshToken);
+  }
   return {
     status: 200,
     body: {
       success: true,
       token: accessToken,
-      refreshToken,
       user: {
         id: user._id,
         username: user.username,
@@ -278,17 +332,17 @@ async function handleVerifyEmail(token) {
   };
 }
 
-app.get('/api/auth/verify-email', async (req, res) => {
-  const result = await handleVerifyEmail(req.query.token);
+app.get('/api/auth/verify-email', authVerifyLimiter, async (req, res) => {
+  const result = await handleVerifyEmail(req.query.token, res);
   res.status(result.status).json(result.body);
 });
 
-app.post('/api/auth/verify-email', async (req, res) => {
-  const result = await handleVerifyEmail(req.body?.token);
+app.post('/api/auth/verify-email', authVerifyLimiter, async (req, res) => {
+  const result = await handleVerifyEmail(req.body?.token, res);
   res.status(result.status).json(result.body);
 });
 
-app.post('/api/auth/resend-verification', async (req, res) => {
+app.post('/api/auth/resend-verification', authResendLimiter, async (req, res) => {
   const { email } = req.body;
   if (!email || typeof email !== 'string') {
     return res.status(400).json({ error: 'Email required' });
@@ -307,7 +361,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
   res.json({ message: genericMessage });
 });
 
-app.post('/api/auth/signin', async (req, res) => {
+app.post('/api/auth/signin', authSignInLimiter, async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: 'Missing fields' });
@@ -335,9 +389,9 @@ app.post('/api/auth/signin', async (req, res) => {
 
   const token = signAccessToken(user);
   const refreshToken = signRefreshToken(user);
+  setRefreshTokenCookie(res, refreshToken);
   res.json({
     token,
-    refreshToken,
     user: {
       id: user._id,
       username: user.username,
@@ -349,13 +403,13 @@ app.post('/api/auth/signin', async (req, res) => {
   });
 });
 
-app.post('/api/auth/refresh', async (req, res) => {
-  const { refreshToken } = req.body;
-  if (!refreshToken || typeof refreshToken !== 'string') {
+app.post('/api/auth/refresh', authRefreshLimiter, async (req, res) => {
+  const refreshToken = getRefreshTokenFromRequest(req);
+  if (!refreshToken) {
     return res.status(400).json({ error: 'Missing refresh token' });
   }
   try {
-    const payload = jwt.verify(refreshToken.trim(), process.env.JWT_SECRET);
+    const payload = jwt.verify(refreshToken, process.env.JWT_SECRET);
     if (payload.type !== 'refresh') {
       return res.status(401).json({ error: 'Invalid refresh token' });
     }
@@ -365,9 +419,9 @@ app.post('/api/auth/refresh', async (req, res) => {
     }
     const token = signAccessToken(user);
     const newRefreshToken = signRefreshToken(user);
+    setRefreshTokenCookie(res, newRefreshToken);
     res.json({
       token,
-      refreshToken: newRefreshToken,
       user: {
         id: user._id,
         username: user.username,
@@ -379,6 +433,11 @@ app.post('/api/auth/refresh', async (req, res) => {
   } catch (err) {
     return res.status(401).json({ error: 'Invalid refresh token' });
   }
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  clearRefreshTokenCookie(res);
+  res.json({ ok: true });
 });
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
