@@ -538,7 +538,7 @@ app.get('/api/floras', optionalAuth, async (req, res) => {
 
   if (followingOnly === 'true' || followingOnly === true) {
     if (!req.user) {
-      return res.status(401).json({ error: 'Sign in to see floras from people you follow' });
+      return res.status(401).json({ error: 'Sign in to see Floras from people you follow' });
     }
     const follows = await Follow.find({ followerId: req.user._id }).select('followingId').lean();
     const followedIds = follows.map((f) => f.followingId);
@@ -582,7 +582,7 @@ app.post('/api/reader/tts', readerTtsLimiter, async (req, res) => {
 
   const floraId = req.body?.floraId;
   if (!floraId || typeof floraId !== 'string') {
-    return res.status(400).json({ error: 'Missing floraId' });
+    return res.status(400).json({ error: 'Missing Flora ID' });
   }
 
   const flora = await Flora.findOne({
@@ -651,7 +651,7 @@ app.post('/api/reader/tts', readerTtsLimiter, async (req, res) => {
   res.send(Buffer.from(arrayBuffer));
 });
 
-/** Dry-run language screen for publish flow — does not create a flora. */
+/** Dry-run language screen for publish flow — does not create a Flora. */
 app.post('/api/floras/screen-preview', requireAuth, requireRole('cultivator', 'admin'), (req, res) => {
   const { title, text } = req.body;
   if (title == null || text == null) {
@@ -765,7 +765,7 @@ app.patch('/api/floras/:id', requireAuth, requireRole('cultivator', 'admin'), as
   }
 
   if (flora.authorId?.toString() !== req.user._id.toString()) {
-    return res.status(403).json({ error: 'Not authorized to edit this flora' });
+    return res.status(403).json({ error: 'Not authorized to edit this Flora' });
   }
 
   const { title, text, status, generative } = req.body;
@@ -814,7 +814,7 @@ app.delete('/api/floras/:id', requireAuth, requireRole('cultivator', 'admin'), a
   }
 
   if (flora.authorId?.toString() !== req.user._id.toString()) {
-    return res.status(403).json({ error: 'Not authorized to delete this flora' });
+    return res.status(403).json({ error: 'Not authorized to delete this Flora' });
   }
 
   await Flora.findByIdAndDelete(req.params.id);

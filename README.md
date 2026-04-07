@@ -7,7 +7,7 @@
 
 ## ✿ What is SPORA?
 
-SPORA is a full-stack collaborative platform where written text transforms into unique generative botanical visualizations. Every word you write becomes a digital organism (a **flora**) shaped by its emotional tone, rhythmic structure, and linguistic properties.
+SPORA is a full-stack collaborative platform where written text transforms into unique generative botanical visualizations. Every word you write becomes a digital organism (a **Flora**) shaped by its emotional tone, rhythmic structure, and linguistic properties.
 
 ### Core Concept
 
@@ -38,7 +38,7 @@ Your creative workspace. Write, preview in real-time, choose your license, and p
 ▸ Original stays intact, lineage tracked forever
 
 ### ✤ Genealogical Trees
-Every flora maintains its complete family tree (from root (Gen 0) through all derivative generations).
+Every Flora maintains its complete family tree (from root (Gen 0) through all derivative generations).
 
 ⟡ ═════════════════════════════════════════ ⟡
 
@@ -102,7 +102,7 @@ This project is split into two repositories for better organization and deployme
 
 ### ○ Guest
 ▹ Browse Garden and Greenhouse  
-▹ View flora details and lineage trees  
+▹ View Flora details and lineage trees  
 ▹ Try Laboratory in demo mode (no publishing)
 
 ### ❀ Cultivator
@@ -334,7 +334,7 @@ This is an academic project. Contributions are not currently accepted, but feedb
 
 This project is licensed under [LICENSE TYPE]. See LICENSE file for details.
 
-Individual floras created on the platform are licensed by their respective authors.
+Individual Floras created on the platform are licensed by their respective authors.
 
 ⟡ ═════════════════════════════════════════ ⟡
 

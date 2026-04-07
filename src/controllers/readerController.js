@@ -10,7 +10,7 @@ async function postReaderTts(req, res) {
 
   const floraId = req.body?.floraId;
   if (!floraId || typeof floraId !== "string") {
-    return res.status(400).json({ error: "Missing floraId" });
+    return res.status(400).json({ error: "Missing Flora ID" });
   }
 
   const flora = await Flora.findOne({
