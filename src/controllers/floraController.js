@@ -76,6 +76,25 @@ async function getFlora(req, res) {
   res.json(flora);
 }
 
+/** Dry-run screening for publish flow — does not create a flora. */
+function previewFloraScreening(req, res) {
+  const { title, text } = req.body;
+  if (title == null || text == null) {
+    return res.status(400).json({ error: "Missing title or text" });
+  }
+  const scan = scanSensitiveLanguage({ title: String(title), text: String(text) });
+  const contentScreening = {
+    flagged: scan.matchedTerms.length > 0,
+    matchCount: scan.matchedTerms.length,
+    titleHits: scan.locations.title,
+    textHits: scan.locations.text,
+  };
+  if (contentScreening.flagged) {
+    contentScreening.matchedTerms = scan.matchedTerms;
+  }
+  res.json({ contentScreening });
+}
+
 async function createFlora(req, res) {
   const { title, text, thumbnailData } = req.body;
   if (!title || !text) {
@@ -208,6 +227,7 @@ async function deleteFlora(req, res) {
 module.exports = {
   listFloras,
   getFlora,
+  previewFloraScreening,
   createFlora,
   updateFlora,
   deleteFlora,

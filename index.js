@@ -651,6 +651,25 @@ app.post('/api/reader/tts', readerTtsLimiter, async (req, res) => {
   res.send(Buffer.from(arrayBuffer));
 });
 
+/** Dry-run language screen for publish flow — does not create a flora. */
+app.post('/api/floras/screen-preview', requireAuth, requireRole('cultivator', 'admin'), (req, res) => {
+  const { title, text } = req.body;
+  if (title == null || text == null) {
+    return res.status(400).json({ error: 'Missing title or text' });
+  }
+  const scan = scanSensitiveLanguage({ title: String(title), text: String(text) });
+  const contentScreening = {
+    flagged: scan.matchedTerms.length > 0,
+    matchCount: scan.matchedTerms.length,
+    titleHits: scan.locations.title,
+    textHits: scan.locations.text,
+  };
+  if (contentScreening.flagged) {
+    contentScreening.matchedTerms = scan.matchedTerms;
+  }
+  res.json({ contentScreening });
+});
+
 app.post('/api/floras', requireAuth, requireRole('cultivator', 'admin'), async (req, res) => {
   const { title, text, status, generative, lineage, coAuthors, license, thumbnailData } = req.body;
   if (!title || !text) {
