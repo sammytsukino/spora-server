@@ -7,7 +7,6 @@
 ## ✦ Table of Contents
 
 - [What is SPORA Server?](#-what-is-spora-server)
-- [Project Status](#-project-status)
 - [Backend Architecture](#-backend-architecture)
 - [API Surface Overview](#-api-surface-overview)
 - [Tech Stack](#-tech-stack)
@@ -24,37 +23,15 @@
 
 ## ✿ What is SPORA Server?
 
-`spora-server` is the backend API for SPORA: a collaborative generative writing platform where text becomes living visual artifacts (**Floras**) and collaboration happens through non-destructive branching.
+`spora-server` is the structural root of SPORA: the API layer where authorship, lineage, moderation, and publication rules are preserved over time.
 
 This repository provides:
-♦ Authentication and session lifecycle  
-♦ Flora publishing, lineage, and retrieval APIs  
-♦ Social graph (follow/unfollow)  
-♦ Moderation and admin operations  
-♦ Email verification and notification support  
+♦ Authentication and session continuity  
+♦ Flora publishing, lineage memory, and retrieval APIs  
+♦ Social graph operations (follow/unfollow)  
+♦ Moderation and stewardship operations  
+♦ Verification and notification flows  
 ♦ Optional media/voice integrations (Cloudinary + ElevenLabs)
-
-⟡ ═════════════════════════════════════════ ⟡
-
-## ✧ Project Status
-
-The backend is in a **solid ~95% implementation stage**, with production-oriented core flows already available.
-
-### Implemented and stable
-▸ JWT auth with access + refresh token flow  
-▸ HTTP-only refresh cookie strategy  
-▸ Email verification workflow (signup, verify, resend)  
-▸ Flora CRUD + status management + lineage support  
-▸ Social follow system and profile relation endpoints  
-▸ Reporting and moderation APIs  
-▸ Admin metrics, charts, and batch moderation actions  
-▸ Language-screening hooks for sensitive-term detection  
-▸ Unit/integration tests with Jest + Supertest
-
-### In active refinement
-▹ Final hardening of edge moderation workflows  
-▹ Documentation and deployment ergonomics  
-▹ Additional operational observability polish
 
 ⟡ ═════════════════════════════════════════ ⟡
 
@@ -85,6 +62,8 @@ The backend is in a **solid ~95% implementation stage**, with production-oriente
 ⟡ ═════════════════════════════════════════ ⟡
 
 ## ❖ API Surface Overview
+
+The API is organized as a set of bounded domains:
 
 ### Health
 ▸ `GET /api/health`
