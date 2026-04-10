@@ -4,370 +4,318 @@
 
 ⟡ ═════════════════════════════════════════ ⟡
 
+## ✦ Table of Contents
 
-## ✿ What is SPORA?
-
-SPORA is a full-stack collaborative platform where written text transforms into unique generative botanical visualizations. Every word you write becomes a digital organism (a **Flora**) shaped by its emotional tone, rhythmic structure, and linguistic properties.
-
-### Core Concept
-
-♦ **Write** → Your text is analyzed automatically (sentiment, morphology, rhythm)  
-♦ **Watch it bloom** → Real-time generative visualization based on your words  
-♦ **Collaborate** → Take "cuttings" from others' works, add your text, create new branches  
-♦ **Preserve** → Original works remain untouched; lineage is fully traceable
-
-
-⟡ ═════════════════════════════════════════ ⟡
-
-
-## ✧ Key Features
-
-### ❀ The Garden
-Gallery of **blossoming works** (open for collaboration). Browse, explore, and take cuttings.
-
-### ❦ The Greenhouse  
-Gallery of **sealed works** (finalized creations, closed to further cuttings).
-
-### ❖ The Laboratory
-Your creative workspace. Write, preview in real-time, choose your license, and publish.
-
-### ✣ Cuttings (Non-Destructive Forking)
-▸ Take a cutting from any open work  
-▸ Add your own text after " / "  
-▸ Generate a new visual identity  
-▸ Original stays intact, lineage tracked forever
-
-### ✤ Genealogical Trees
-Every Flora maintains its complete family tree (from root (Gen 0) through all derivative generations).
+- [What is SPORA Server?](#-what-is-spora-server)
+- [Project Status](#-project-status)
+- [Backend Architecture](#-backend-architecture)
+- [API Surface Overview](#-api-surface-overview)
+- [Tech Stack](#-tech-stack)
+- [Getting Started](#-getting-started)
+- [Available Scripts](#-available-scripts)
+- [Project Structure](#-project-structure)
+- [Domain and Policy Notes](#-domain-and-policy-notes)
+- [Testing Notes](#-testing-notes)
+- [License](#-license)
+- [Author](#-author)
+- [Contact](#-contact)
 
 ⟡ ═════════════════════════════════════════ ⟡
 
+## ✿ What is SPORA Server?
 
-## ♢ Architecture
+`spora-server` is the backend API for SPORA: a collaborative generative writing platform where text becomes living visual artifacts (**Floras**) and collaboration happens through non-destructive branching.
 
-### The Soil/Seed Model
-
-**Soil** = Static visual template  
-Assigned based on emotional analysis of the text (negative, neutral, positive). Defines color palette, growth pattern, and visual style.
-
-**Seed** = Dynamic parameters  
-Extracted from text morphology (character count, word density, rhythm, structure). These parameters drive the actual rendering.
-
-This separation ensures:  
-▹ Lightweight database storage (only parameters, not full renders)  
-▹ Portability across visual environments  
-▹ Regeneration of works without data loss
+This repository provides:
+♦ Authentication and session lifecycle  
+♦ Flora publishing, lineage, and retrieval APIs  
+♦ Social graph (follow/unfollow)  
+♦ Moderation and admin operations  
+♦ Email verification and notification support  
+♦ Optional media/voice integrations (Cloudinary + ElevenLabs)
 
 ⟡ ═════════════════════════════════════════ ⟡
 
+## ✧ Project Status
+
+The backend is in a **solid ~95% implementation stage**, with production-oriented core flows already available.
+
+### Implemented and stable
+▸ JWT auth with access + refresh token flow  
+▸ HTTP-only refresh cookie strategy  
+▸ Email verification workflow (signup, verify, resend)  
+▸ Flora CRUD + status management + lineage support  
+▸ Social follow system and profile relation endpoints  
+▸ Reporting and moderation APIs  
+▸ Admin metrics, charts, and batch moderation actions  
+▸ Language-screening hooks for sensitive-term detection  
+▸ Unit/integration tests with Jest + Supertest
+
+### In active refinement
+▹ Final hardening of edge moderation workflows  
+▹ Documentation and deployment ergonomics  
+▹ Additional operational observability polish
+
+⟡ ═════════════════════════════════════════ ⟡
+
+## ♢ Backend Architecture
+
+### Runtime and Security
+▸ Node.js + Express  
+▸ MongoDB + Mongoose  
+▸ `helmet`, `cors`, `express-rate-limit`, `cookie-parser`  
+▸ `express-async-errors` for async error propagation
+
+### Auth Model
+▸ Access token (short-lived JWT, bearer)  
+▸ Refresh token (JWT in secure HTTP-only cookie)  
+▸ Account status enforcement (`active`, `suspended`, `deleted`)  
+▸ Role enforcement (`cultivator`, `admin`)
+
+### Content and Governance
+▸ Flora schema includes lineage, generative payload, license, and moderation state  
+▸ Report system for user-generated moderation events  
+▸ Admin action logging via dedicated model  
+▸ Automatic language-screen report sync for created/updated Floras
+
+### Optional Integrations
+▸ Cloudinary for avatar/flora thumbnail uploads  
+▸ ElevenLabs for `/api/reader/tts` audio generation
+
+⟡ ═════════════════════════════════════════ ⟡
+
+## ❖ API Surface Overview
+
+### Health
+▸ `GET /api/health`
+
+### Authentication
+▸ `POST /api/auth/signup`  
+▸ `POST /api/auth/signin`  
+▸ `POST /api/auth/refresh`  
+▸ `POST /api/auth/logout`  
+▸ `GET /api/auth/me`  
+▸ `PATCH /api/auth/me`  
+▸ `GET|POST /api/auth/verify-email`  
+▸ `POST /api/auth/resend-verification`  
+▸ `POST /api/auth/me/unsign`
+
+### Floras
+▸ `GET /api/floras`  
+▸ `GET /api/floras/:id`  
+▸ `POST /api/floras/screen-preview`  
+▸ `POST /api/floras`  
+▸ `PATCH /api/floras/:id`  
+▸ `DELETE /api/floras/:id`
+
+### Reader
+▸ `POST /api/reader/tts` (requires ElevenLabs env configuration)
+
+### Social
+▸ `GET /api/follows/me/following`  
+▸ `POST /api/follows/:userId`  
+▸ `DELETE /api/follows/:userId`  
+▸ `GET /api/follows/:userId/status`
+
+### Reports
+▸ `POST /api/reports`
+
+### Admin
+▸ `GET /api/admin/floras` + moderation updates  
+▸ `GET /api/admin/reports` + review actions  
+▸ `GET /api/admin/users` + role/status/account actions  
+▸ `GET /api/admin/metrics`  
+▸ `GET /api/admin/usage`  
+▸ `GET /api/admin/usage/charts`  
+▸ Batch endpoints for users/floras/reports
+
+⟡ ═════════════════════════════════════════ ⟡
 
 ## ⚙ Tech Stack
 
-This project is split into two repositories for better organization and deployment flexibility.
+### Core
+▸ Node.js (>=18)  
+▸ Express 4  
+▸ MongoDB + Mongoose 8
 
-### Frontend Repository
+### Security and Auth
+▸ jsonwebtoken  
+▸ bcryptjs  
+▸ helmet  
+▸ cors  
+▸ express-rate-limit  
+▸ cookie-parser
 
-**Technologies:**  
-▸ React + TypeScript  
-▸ Tailwind CSS for styling  
-▸ p5.js / Three.js for generative visualizations
+### Infrastructure and Services
+▸ dotenv  
+▸ morgan  
+▸ nodemailer  
+▸ cloudinary
 
-**Repository:** `spora-client`
-
-### Backend Repository
-
-**Technologies:**  
-▸ Node.js + Express  
-▸ MongoDB + Mongoose ODM  
-▸ RESTful API architecture  
-▸ MVC pattern (Models, Controllers, Routes)
-
-**Authentication & Security:**  
-▸ JWT (JSON Web Tokens) for authentication  
-▸ bcrypt for password hashing  
-▸ Helmet for security headers  
-▸ CORS configuration
-
-**Text Analysis:**  
-▸ Natural.js for morphological analysis  
-▸ Sentiment.js for emotional detection  
-▸ Custom algorithms for rhythm and structure extraction
-
-**Repository:** `spora-server`
+### Quality
+▸ Jest  
+▸ Supertest  
+▸ Nodemon (development)
 
 ⟡ ═════════════════════════════════════════ ⟡
-
-
-## ♡ User Roles
-
-### ○ Guest
-▹ Browse Garden and Greenhouse  
-▹ View Flora details and lineage trees  
-▹ Try Laboratory in demo mode (no publishing)
-
-### ❀ Cultivator
-▹ Full access: create, publish, take cuttings  
-▹ Manage own works (edit title, seal, hide, delete)  
-▹ Download visualizations  
-▹ Build collaborative genealogies
-
-### ★ Admin
-▹ Moderation tools (hide/delete content)  
-▹ User management (suspend/delete accounts)  
-▹ Review reports  
-▹ Access activity logs
-
-⟡ ═════════════════════════════════════════ ⟡
-
-
-## ◈ Key Policies
-
-### Immutable Text
-Once published, text cannot be edited. This protects:  
-▸ Historical integrity  
-▸ Coherence with derivative works  
-▸ Trust in the collaborative system
-
-### Protected Collaboration
-Works with cuttings **cannot be deleted** (only hidden). This ensures:  
-▸ Derivative works remain functional  
-▸ Co-authors' contributions are protected  
-▸ Lineage integrity is preserved
-
-### GDPR-Compliant Anonymization
-Users can delete their account via soft delete:  
-▹ All personal data eliminated (email, password, profile)  
-▹ Works preserved as `[forgotten author]`  
-▹ Cuttings continue functioning normally  
-▹ Lineage remains traceable
-
-⟡ ═════════════════════════════════════════ ⟡
-
-
-## ◉ License System
-
-Works are published under:  
-▸ **CC-BY** (Attribution - Recommended)  
-
-**License Inheritance:**  
-Cuttings inherit license restrictions from parent work according to Creative Commons standard rules.
-
-⟡ ═════════════════════════════════════════ ⟡
-
-
-## ⊙ Project Goals
-
-### Technical
-▹ Build a functional full-stack application  
-▹ Implement dual-phase text analysis (emotional + morphological)  
-▹ Create parametric generative rendering system  
-▹ Design a data architecture supporting forking and genealogy
-
-### Artistic & Conceptual
-▹ Explore direct relationship between textual and visual properties  
-▹ Democratize generative art creation (no coding required)  
-▹ Investigate shared authorship and organic collaboration models  
-▹ Create inseparable bond between text and visual output
-
-### Educational
-▹ Master complete web development lifecycle  
-▹ Gain advanced NLP experience in artistic context  
-▹ Understand complexities of collaborative systems with traceability
-
-⟡ ═════════════════════════════════════════ ⟡
-
 
 ## ◆ Getting Started
 
 ### Prerequisites
 ```bash
-Node.js >= 18.x
-MongoDB >= 5.x (local or Docker)
-npm or yarn
+Node.js >= 18
+npm >= 9
+MongoDB (local, Docker, or cloud URI)
 ```
 
 ### Installation
-
-**Frontend Repository:**
 ```bash
-# Clone frontend repository
-git clone https://github.com/sammytsukino/spora-client.git
-cd spora-client
-
-# Install dependencies
-npm install
-
-# Set up environment variables (create .env file)
-# VITE_API_URL=http://localhost:4000/api
-
-# Run development server
-npm run dev
-```
-
-**Backend Repository:**
-```bash
-# Clone backend repository
 git clone https://github.com/sammytsukino/spora-server.git
 cd spora-server
-
-# Install dependencies
 npm install
-
-# Set up environment variables (create .env file)
-# PORT=4000
-# MONGO_URL=mongodb://localhost:27017/sporadb
-# JWT_SECRET=your_secret_here
-# CORS_ORIGIN=http://localhost:5173
-
-# Start MongoDB (if using Docker)
-docker run -d --name spora-mongo -p 27017:27017 mongo:latest
-
-# Run development server
-npm run dev
 ```
 
 ### Environment Variables
+Create `.env` in repository root (same level as `index.js`).
 
-**Frontend (.env):**
-```
-VITE_API_BASE_URL=http://localhost:4000/api
-```
-
-
-
-**Backend (.env):**
-
-You must create your own `.env` file in the root of the backend project (`spora-server`). This file is **not included** for security reasons.
-
-Example content for `.env`:
-```
+Minimal local setup:
+```env
 PORT=4000
-# MongoDB: either MONGODB_URI or MONGO_URL (both supported)
-MONGODB_URI=mongodb://localhost:27017/sporadb
 JWT_SECRET=use_a_long_random_string_at_least_32_chars
+MONGODB_URI=mongodb://localhost:27017/sporadb
 CORS_ORIGIN=http://localhost:5173
 FRONTEND_URL=http://localhost:5173
-
-# Production: set NODE_ENV=production, use a real MongoDB URI, set CORS_ORIGIN to your deployed
-# frontend origin (not *), and use a strong JWT_SECRET.
-
-# Optional: SMTP for verification emails (see .env.example)
-# Optional: Cloudinary for uploads (see .env.example)
-# Optional: Flora Reader text-to-speech (ElevenLabs). Without these, POST /api/reader/tts returns 503.
-# ELEVENLABS_API_KEY=
-# ELEVENLABS_VOICE_ID=
-# ELEVENLABS_MODEL_ID=eleven_multilingual_v2
 ```
 
-See also `.env.example` in this repo for a fuller template.
+Also supported (optional / feature-dependent):
+```env
+# Legacy Mongo alias also accepted
+MONGO_URL=
 
-**Instructions:**
-- Copy the example above into a file named `.env` at the root of this repository.
-- Change the values as needed for your environment. **`JWT_SECRET` must be at least 32 characters** (the server exits on startup if it is shorter or missing).
-- **Never share your `.env` file or commit it to public repositories.**
+# SMTP for account verification emails
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM=
+
+# Cloudinary for avatar/flora thumbnails
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+
+# ElevenLabs for Flora Reader TTS
+ELEVENLABS_API_KEY=
+ELEVENLABS_VOICE_ID=
+ELEVENLABS_MODEL_ID=eleven_multilingual_v2
+```
+
+Important startup constraints:
+▸ `JWT_SECRET` is mandatory and must be at least 32 characters  
+▸ In production, `CORS_ORIGIN` must be explicit (never `*`)
+
+### Run
+```bash
+npm run dev   # nodemon index.js
+# or
+npm start     # node index.js
+```
+
+⟡ ═════════════════════════════════════════ ⟡
+
+## ◈ Available Scripts
+
+```bash
+npm run dev            # Start development server with nodemon
+npm run server         # Alias of dev
+npm start              # Start production server
+npm test               # Run Jest suite
+npm run test:watch     # Jest watch mode
+npm run test:coverage  # Coverage report
+```
 
 ⟡ ═════════════════════════════════════════ ⟡
 
 ## ◈ Project Structure
 
-**Frontend Repository (spora-client):**
-```
-spora-client/
-├── src/
-│   ├── components/     # Reusable UI components
-│   ├── pages/          # Main views (Garden, Laboratory, etc.)
-│   ├── router/         # Routing configuration
-│   ├── services/       # API communication
-│   └── styles/         # Global styles
-├── public/             # Static assets
-└── docs/               # Frontend documentation
-```
-
-**Backend Repository (spora-server):**
-
-**Process entry:** `npm start` and `npm run dev` run **`index.js`** at the repo root (not `src/server.js`). The `src/app.js` / `src/server.js` stack is an alternate modular layout that is not wired to the default scripts.
-
-```
+```text
 spora-server/
-├── index.js                      # Server entry point (npm start)
-├── db.js                         # MongoDB connection (used by index.js)
+├── index.js                      # Main runtime entry used by npm scripts
+├── db.js                         # MongoDB connection helper used by index.js
 ├── src/
-│   ├── app.js                    # Alternate Express app (not default entry)
-│   ├── server.js                 # Alternate entry (not used by npm start)
-│   ├── config/
-│   │   └── db.js                 # MongoDB helper for alternate stack
-│   ├── models/                   # Mongoose schemas
-│   │   ├── User.js               # User model (auth, roles)
-│   │   ├── Flora.js              # Flora model (text + generative data)
-│   │   ├── Report.js             # Report model (moderation)
-│   │   └── AdminLog.js           # Admin action logs
-│   ├── controllers/              # Business logic
-│   │   ├── authController.js     # Signup, signin, JWT
-│   │   ├── floraController.js    # CRUD operations
-│   │   ├── reportController.js   # Report creation
-│   │   └── adminController.js    # Admin panel
-│   ├── routes/                   # Express routes
-│   │   ├── auth.js               # Auth endpoints
-│   │   ├── floras.js             # Flora endpoints
-│   │   ├── reports.js            # Report endpoints
-│   │   └── admin.js              # Admin endpoints
-│   ├── middleware/               # Auth & validation
-│   │   ├── auth.js               # JWT verification, role checking
-│   │   └── error.js              # Error handling
-│   └── services/                 # Text analysis (future)
-├── postman_collection.json       # API testing
-├── .env                          # Environment variables
-└── package.json                  # Dependencies
+│   ├── app.js                    # Alternate modular app entry (not default runtime)
+│   ├── server.js                 # Alternate server entry (not default runtime)
+│   ├── config/                   # Config helpers
+│   ├── controllers/              # Domain/business handlers
+│   ├── lib/                      # Auth/session/security utility modules
+│   ├── middleware/               # Auth + error middleware
+│   ├── models/                   # Mongoose domain models
+│   ├── routes/                   # Route modules for modular stack
+│   └── services/                 # Email and moderation supporting services
+├── config/                       # Shared static moderation config
+├── models/                       # Additional top-level models used by runtime
+├── postman_collection.json       # API testing collection
+└── README.md
 ```
 
 ⟡ ═════════════════════════════════════════ ⟡
 
+## ♡ Domain and Policy Notes
 
-## ◑ Contributing
+### Roles
+▸ **Cultivator**: create/publish/manage own Floras and profile  
+▸ **Admin**: moderation, user governance, reporting analytics
 
-This is an academic project. Contributions are not currently accepted, but feedback is welcome!
+### Collaboration Integrity
+▸ Lineage metadata is preserved across derivative creation  
+▸ Moderation actions rely on soft-state transitions where possible  
+▸ Anonymization workflows preserve ecosystem continuity
+
+### Compliance-Oriented Behaviors
+▸ Account/status controls support reversible moderation  
+▸ Author anonymization endpoints preserve derived Flora operability  
+▸ Sensitive-language screening is tracked and reviewable
 
 ⟡ ═════════════════════════════════════════ ⟡
 
+## ◑ Testing Notes
+
+Backend tests include:
+▸ Route-level behavior checks  
+▸ Middleware validations  
+▸ Utility service tests (token and language screening flows)
+
+Suggested validation pass before deployment:
+```bash
+npm test
+npm run test:coverage
+```
+
+⟡ ═════════════════════════════════════════ ⟡
 
 ## ◍ License
 
-This project is licensed under [LICENSE TYPE]. See LICENSE file for details.
+This repository is part of the SPORA project.
+Code license details should be defined in the project `LICENSE` file.
 
-Individual Floras created on the platform are licensed by their respective authors.
+Individual Floras published in the platform are licensed by their authors under platform rules.
 
 ⟡ ═════════════════════════════════════════ ⟡
-
 
 ## ◕ Author
 
 **Sammy Cabello**  
-SPORA ▸ CEI: Centros de Estudios de Innovación  
+SPORA ▸ CEI: Centros de Estudios de Innovacion  
 Academic Year: 2025-2026
 
-
 ⟡ ═════════════════════════════════════════ ⟡
-
-
-## ♥ Acknowledgments
-
-▹ Creative Commons for licensing framework  
-▹ p5.js community for generative art tools  
-▹ Open source NLP libraries (Natural.js, Sentiment.js)  
-▹ Inspiration: GitHub (forking model), Wikipedia (collaborative content), Stack Overflow (attribution system)
-
-
-⟡ ═════════════════════════════════════════ ⟡
-
 
 ## ◈ Contact
 
-▸ **Email:** sammy.cabello.g@gmail.com
-▸ **GitHub:** [@sammytsukino](https://github.com/sammytsukino)  
-▸ **Project Demo:** [https://spora.com](https://spora.com)
-
+▸ **Email:** sammy.cabello.g@gmail.com  
+▸ **GitHub:** [@sammytsukino](https://github.com/sammytsukino)
 
 ⟡ ═════════════════════════════════════════ ⟡
 
-
-**SPORA** ♡ Where every text has roots, and every collaboration branches into new possibilities.
+**SPORA Server** ♡ The backend soil where collaboration, lineage, and governance are rooted.
