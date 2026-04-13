@@ -220,11 +220,10 @@ npm run test:coverage  # Coverage report
 
 ```text
 spora-server/
-├── index.js                      # Main runtime entry used by npm scripts
-├── db.js                         # MongoDB connection helper used by index.js
+├── index.js                      # Main runtime entry; boots src/server.js
 ├── src/
-│   ├── app.js                    # Alternate modular app entry (not default runtime)
-│   ├── server.js                 # Alternate server entry (not default runtime)
+│   ├── app.js                    # Express app composition (routes + middleware)
+│   ├── server.js                 # Server bootstrap and DB connection
 │   ├── config/                   # Config helpers
 │   ├── controllers/              # Domain/business handlers
 │   ├── lib/                      # Auth/session/security utility modules
@@ -233,7 +232,6 @@ spora-server/
 │   ├── routes/                   # Route modules for modular stack
 │   └── services/                 # Email and moderation supporting services
 ├── config/                       # Shared static moderation config
-├── models/                       # Additional top-level models used by runtime
 ├── postman_collection.json       # API testing collection
 └── README.md
 ```

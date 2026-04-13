@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
-const { connectDB } = require('../db');
-const User = require('../models/User');
+const { connectDb } = require('../src/config/db');
+const User = require('../src/models/User');
 
 async function main() {
-  await connectDB();
+  await connectDb();
   const result = await User.updateMany(
     { role: 'admin' },
     { $set: { emailVerified: true } }

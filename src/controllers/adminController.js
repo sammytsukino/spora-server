@@ -396,10 +396,8 @@ async function batchUpdateFloras(req, res) {
         flora.isHidden = false;
         await flora.save();
       } else if (action === "delete") {
-        flora.isHidden = true;
-        flora.isDeleted = true;
-        flora.deletedAt = new Date();
-        await flora.save();
+        await Report.deleteMany({ reportedFloraId: flora._id });
+        await flora.deleteOne();
       }
       results.updated++;
       await logAdminAction({

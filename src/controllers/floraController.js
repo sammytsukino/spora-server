@@ -1,6 +1,7 @@
 const { v2: cloudinary } = require("cloudinary");
 const Flora = require("../models/Flora");
 const Follow = require("../models/Follow");
+const Report = require("../models/Report");
 const { scanSensitiveLanguage } = require("../lib/scanSensitiveLanguage");
 const { syncLanguageScreenReport } = require("../services/languageScreenReport");
 
@@ -38,11 +39,15 @@ function buildFloraPayload(user, body) {
 }
 
 async function listFloras(req, res) {
-  const { status, authorId, generation, followingOnly } = req.query;
+  const { status, authorId, generation, followingOnly, includeHidden } = req.query;
   const filter = { isDeleted: { $ne: true } };
+  const requesterIsAdmin = req.user?.role === "admin";
+  const canIncludeHidden =
+    requesterIsAdmin && (includeHidden === "true" || includeHidden === true);
   if (status) {
     filter.status = status;
-  } else {
+  }
+  if (!canIncludeHidden) {
     filter.isHidden = { $ne: true };
   }
   if (authorId) {
@@ -71,6 +76,16 @@ async function listFloras(req, res) {
 async function getFlora(req, res) {
   const flora = await Flora.findById(req.params.id);
   if (!flora) {
+    return res.status(404).json({ error: "Flora not found" });
+  }
+  const requesterId = req.user?._id?.toString();
+  const requesterIsAdmin = req.user?.role === "admin";
+  const requesterIsOwner =
+    requesterId && flora.authorId?.toString() === requesterId;
+  if (flora.isDeleted) {
+    return res.status(404).json({ error: "Flora not found" });
+  }
+  if (flora.isHidden && !requesterIsAdmin && !requesterIsOwner) {
     return res.status(404).json({ error: "Flora not found" });
   }
   res.json(flora);
@@ -220,6 +235,7 @@ async function deleteFlora(req, res) {
     return res.status(403).json({ error: "Flora is not open for deletion" });
   }
 
+  await Report.deleteMany({ reportedFloraId: flora._id });
   await flora.deleteOne();
   res.status(204).send();
 }
