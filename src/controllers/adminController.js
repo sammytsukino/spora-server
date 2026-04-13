@@ -251,6 +251,17 @@ async function listReports(req, res) {
   res.json(normalized);
 }
 
+async function getReportSignal(req, res) {
+  const [pendingCount, latestPending] = await Promise.all([
+    Report.countDocuments({ status: "pending" }),
+    Report.findOne({ status: "pending" }).sort({ createdAt: -1 }).select("createdAt").lean(),
+  ]);
+  res.json({
+    pendingCount,
+    latestPendingAt: latestPending?.createdAt || null,
+  });
+}
+
 async function updateReport(req, res) {
   const report = await Report.findById(req.params.id);
   if (!report) {
@@ -507,6 +518,7 @@ module.exports = {
   updateUserStatus,
   softDeleteUser,
   listReports,
+  getReportSignal,
   updateReport,
   listFlagged,
   listAdminFloras,

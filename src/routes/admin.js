@@ -8,6 +8,7 @@ const {
   updateUserStatus,
   softDeleteUser,
   listReports,
+  getReportSignal,
   updateReport,
   listFlagged,
   listAdminFloras,
@@ -31,6 +32,7 @@ router.patch("/users/:id/status", updateUserStatus);
 router.delete("/users/:id", softDeleteUser);
 
 router.get("/reports", listReports);
+router.get("/reports/signal", getReportSignal);
 router.patch("/reports/:id", updateReport);
 
 router.get("/flagged", listFlagged);

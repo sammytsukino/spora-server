@@ -79,8 +79,67 @@ async function sendVerificationEmailToUser(user) {
   return token;
 }
 
+async function sendAdminNewReportEmail({
+  recipients,
+  reportId,
+  reportedFloraId,
+  category,
+  reason,
+  reportedByUsername,
+}) {
+  if (!Array.isArray(recipients) || recipients.length === 0) return;
+  if (!transporter) {
+    console.warn(
+      "[Email] SMTP not configured. Admin new-report notification skipped."
+    );
+    return;
+  }
+
+  const adminUrl = `${FRONTEND_URL}/admin?tab=Reports`;
+  const subject = `SPORA admin alert: new report ${reportId}`;
+  const text = [
+    "A new report was submitted in SPORA.",
+    "",
+    `Report ID: ${reportId}`,
+    `Flora ID: ${reportedFloraId}`,
+    `Category: ${category || "other"}`,
+    `Reason: ${reason || "n/a"}`,
+    `Reported by: ${reportedByUsername || "unknown"}`,
+    "",
+    `Open Admin Panel: ${adminUrl}`,
+  ].join("\n");
+
+  const html = `
+    <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto;">
+      <h2>New SPORA report submitted</h2>
+      <p>A new report requires moderation review.</p>
+      <ul>
+        <li><strong>Report ID:</strong> ${reportId}</li>
+        <li><strong>Flora ID:</strong> ${reportedFloraId}</li>
+        <li><strong>Category:</strong> ${category || "other"}</li>
+        <li><strong>Reason:</strong> ${reason || "n/a"}</li>
+        <li><strong>Reported by:</strong> ${reportedByUsername || "unknown"}</li>
+      </ul>
+      <p style="margin-top: 20px;">
+        <a href="${adminUrl}" style="display: inline-block; padding: 12px 20px; background: #262626; color: #bbf451; text-decoration: none; font-weight: bold; border-radius: 4px;">
+          Open Admin Panel
+        </a>
+      </p>
+    </div>
+  `;
+
+  await transporter.sendMail({
+    from: process.env.SMTP_FROM || "SPORA <noreply@spora.app>",
+    to: recipients.join(","),
+    subject,
+    text,
+    html,
+  });
+}
+
 module.exports = {
   generateVerificationToken,
   sendVerificationEmail,
   sendVerificationEmailToUser,
+  sendAdminNewReportEmail,
 };
