@@ -1,0 +1,15 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# Create a Web Service from this repo; Render can import this file or you can
+# paste equivalent settings in the dashboard. Set secrets in the Render UI.
+
+services:
+  - type: web
+    name: spora-api
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production

@@ -16,6 +16,19 @@ const { notFound, errorHandler } = require("./middleware/error");
 
 const app = express();
 
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
+
+function parseCorsOrigin() {
+  const raw = process.env.CORS_ORIGIN?.trim();
+  if (!raw) return true;
+  const list = raw.split(",").map((s) => s.trim()).filter(Boolean);
+  if (list.length === 0) return true;
+  if (list.length === 1) return list[0];
+  return list;
+}
+
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -23,7 +36,7 @@ app.use(
 );
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || true,
+    origin: parseCorsOrigin(),
     credentials: true,
   })
 );
