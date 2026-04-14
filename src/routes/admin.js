@@ -27,13 +27,13 @@ router.get("/metrics", getMetrics);
 router.get("/usage", getUsage);
 router.get("/usage/charts", getUsageCharts);
 router.get("/users", listUsers);
+router.patch("/users/batch", batchUpdateUsers);
 router.patch("/users/:id/role", updateUserRole);
 router.patch("/users/:id/status", updateUserStatus);
 router.delete("/users/:id", softDeleteUser);
 
 router.get("/reports", listReports);
 router.get("/reports/signal", getReportSignal);
-// Static paths before :id — otherwise "batch" is matched as report id.
 router.patch("/reports/batch", batchUpdateReports);
 router.patch("/reports/:id", updateReport);
 
@@ -41,6 +41,5 @@ router.get("/flagged", listFlagged);
 router.get("/floras", listAdminFloras);
 router.patch("/floras/batch", batchUpdateFloras);
 router.patch("/floras/:id/status", updateFloraStatus);
-router.patch("/users/batch", batchUpdateUsers);
 
 module.exports = router;

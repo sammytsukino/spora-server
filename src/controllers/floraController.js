@@ -91,7 +91,6 @@ async function getFlora(req, res) {
   res.json(flora);
 }
 
-/** Dry-run screening for publish flow — does not create a Flora. */
 function previewFloraScreening(req, res) {
   const { title, text } = req.body;
   if (title == null || text == null) {

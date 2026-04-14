@@ -1,7 +1,3 @@
-/**
- * Value for the `cors` package `origin` option. Comma-separated URLs in CORS_ORIGIN.
- * @returns {boolean|string|string[]}
- */
 function parseCorsOrigin() {
   const raw = process.env.CORS_ORIGIN?.trim();
   if (!raw) return true;

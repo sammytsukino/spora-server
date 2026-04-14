@@ -22,13 +22,6 @@ function buildDescription(scan) {
   return description;
 }
 
-/**
- * @param {import("mongoose").Model} Report
- * @param {"reportedFloraId"|"reportedFlora"} floraField
- * @param {import("mongoose").Types.ObjectId|string} floraId
- * @param {string} title
- * @param {string} text
- */
 async function syncLanguageScreenReportWithModel(Report, floraField, floraId, title, text) {
   const scan = scanSensitiveLanguage({ title, text });
   const hasMatches = scan.matchedTerms.length > 0;
@@ -99,7 +92,6 @@ async function syncLanguageScreenReportWithModel(Report, floraField, floraId, ti
   };
 }
 
-/** Uses modular app Report model (`reportedFloraId`). */
 async function syncLanguageScreenReport(floraId, title, text) {
   const Report = require("../models/Report");
   return syncLanguageScreenReportWithModel(Report, "reportedFloraId", floraId, title, text);

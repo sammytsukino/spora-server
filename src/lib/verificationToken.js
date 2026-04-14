@@ -4,10 +4,6 @@ function hashVerificationToken(plainToken) {
   return crypto.createHash("sha256").update(String(plainToken), "utf8").digest("hex");
 }
 
-/**
- * Pending verification: DB stores SHA-256 hex of the secret sent by email only.
- * Falls back to legacy plaintext match for rows created before hashing.
- */
 async function findUserForVerificationToken(plainToken, User) {
   const trimmed = String(plainToken).trim();
   if (!trimmed) return null;

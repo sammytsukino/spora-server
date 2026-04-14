@@ -4,7 +4,6 @@ function getRefreshCookieSameSite() {
   const override = process.env.REFRESH_COOKIE_SAMESITE?.trim().toLowerCase();
   if (override === "lax" || override === "strict") return override;
   if (override === "none") return "none";
-  // SPA on another host (e.g. Vercel) + API on Render: subrequests need SameSite=None + Secure.
   return process.env.NODE_ENV === "production" ? "none" : "lax";
 }
 
@@ -35,9 +34,6 @@ function clearRefreshTokenCookie(res) {
   });
 }
 
-/**
- * Prefer httpOnly cookie; in non-production also accept body (dev / legacy clients).
- */
 function getRefreshTokenFromRequest(req) {
   const fromCookie = req.cookies && req.cookies[REFRESH_COOKIE_NAME];
   if (fromCookie && typeof fromCookie === "string") return fromCookie.trim();

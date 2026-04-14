@@ -29,16 +29,11 @@ function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** @param {string} str */
 function tokenize(str) {
   if (!str || typeof str !== "string") return [];
   return str.toLowerCase().match(/[\p{L}\p{M}]+/gu) || [];
 }
 
-/**
- * @param {string} phrase space-separated, lowercased
- * @param {string} field
- */
 function phraseMatchesField(phrase, field) {
   if (!field) return false;
   const parts = phrase.split(/\s+/).filter(Boolean);
@@ -47,20 +42,11 @@ function phraseMatchesField(phrase, field) {
   return re.test(field);
 }
 
-/**
- * @param {string} word single token, lowercased
- * @param {string[]} tokens
- */
 function wordInTokens(word, tokens) {
   const set = new Set(tokens);
   return set.has(word);
 }
 
-/**
- * Scan title and text for whole-word / whole-phrase matches against a term list.
- * @param {{ title?: string, text?: string, terms?: string[], termsPath?: string }} opts
- * @returns {{ matchedTerms: string[], locations: { title: number, text: number } }}
- */
 function scanSensitiveLanguage(opts = {}) {
   const title = opts.title ?? "";
   const text = opts.text ?? "";

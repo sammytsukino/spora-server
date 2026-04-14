@@ -1,11 +1,3 @@
-/**
- * Tests target `src/app.js` (modular Express app).
- * Production `npm start` runs root `index.js`, which duplicates some routes with
- * different behavior (e.g. signup edge cases). See route tests here as the
- * contract for the modular API only.
- *
- * @type {import("jest").Config}
- */
 module.exports = {
   testEnvironment: "node",
   roots: ["<rootDir>/src"],

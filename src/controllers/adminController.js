@@ -1,7 +1,17 @@
+const mongoose = require("mongoose");
 const User = require("../models/User");
 const Flora = require("../models/Flora");
 const Report = require("../models/Report");
 const AdminLog = require("../models/AdminLog");
+
+function normalizeReportForAdminJson(report) {
+  if (!report) return null;
+  const obj = report.toObject ? report.toObject() : report;
+  return {
+    ...obj,
+    reportedFlora: obj.reportedFloraId,
+  };
+}
 
 async function logAdminAction({ req, action, actionCategory, targetType, targetId, targetDescription, details }) {
   await AdminLog.create({
@@ -15,6 +25,14 @@ async function logAdminAction({ req, action, actionCategory, targetType, targetI
     details,
     ipAddress: req.ip,
   });
+}
+
+async function logAdminActionSafe(payload) {
+  try {
+    await logAdminAction(payload);
+  } catch (err) {
+    console.error("[admin] AdminLog write failed:", err?.message || err);
+  }
 }
 
 async function getMetrics(req, res) {
@@ -156,7 +174,7 @@ async function updateUserRole(req, res) {
   user.role = role;
   await user.save();
 
-  await logAdminAction({
+  await logAdminActionSafe({
     req,
     action: "user_role_update",
     actionCategory: "user_management",
@@ -183,7 +201,7 @@ async function updateUserStatus(req, res) {
   user.accountStatus = status;
   await user.save();
 
-  await logAdminAction({
+  await logAdminActionSafe({
     req,
     action: "user_status_update",
     actionCategory: "user_management",
@@ -215,7 +233,7 @@ async function softDeleteUser(req, res) {
     { $set: { isAuthorAnonymized: true, authorUsername: "Anonymous" } }
   );
 
-  await logAdminAction({
+  await logAdminActionSafe({
     req,
     action: "user_soft_delete",
     actionCategory: "user_management",
@@ -240,13 +258,7 @@ async function listReports(req, res) {
     .limit(parseInt(limit) || 50)
     .skip(parseInt(skip) || 0);
 
-  const normalized = reports.map((r) => {
-    const obj = r.toObject ? r.toObject() : r;
-    return {
-      ...obj,
-      reportedFlora: obj.reportedFloraId,
-    };
-  });
+  const normalized = reports.map((r) => normalizeReportForAdminJson(r));
 
   res.json(normalized);
 }
@@ -263,23 +275,36 @@ async function getReportSignal(req, res) {
 }
 
 async function updateReport(req, res) {
-  const report = await Report.findById(req.params.id);
+  const rawId = (req.params.id && String(req.params.id).trim()) || "";
+  if (!mongoose.Types.ObjectId.isValid(rawId)) {
+    return res.status(400).json({ error: "Invalid report id" });
+  }
+
+  const { status, action, adminNotes, reason } = req.body;
+  const $set = {
+    "resolution.resolvedBy": req.user._id,
+    "resolution.resolvedAt": new Date(),
+  };
+  if (status) {
+    $set.status = status;
+  }
+  if (action !== undefined && action !== null && action !== "") {
+    $set["resolution.action"] = action;
+  }
+  if (adminNotes !== undefined) {
+    $set["resolution.adminNotes"] = adminNotes;
+  }
+
+  const report = await Report.findByIdAndUpdate(rawId, { $set }, { new: true, runValidators: true })
+    .populate("reportedBy", "username")
+    .populate("reportedFloraId", "title authorUsername")
+    .populate("resolution.resolvedBy", "username");
+
   if (!report) {
     return res.status(404).json({ error: "Report not found" });
   }
 
-  const { status, action, adminNotes, reason } = req.body;
-  if (status) {
-    report.status = status;
-  }
-  report.resolution = report.resolution || {};
-  report.resolution.resolvedBy = req.user._id;
-  report.resolution.resolvedAt = new Date();
-  report.resolution.action = action || report.resolution.action;
-  report.resolution.adminNotes = adminNotes || report.resolution.adminNotes;
-  await report.save();
-
-  await logAdminAction({
+  await logAdminActionSafe({
     req,
     action: "report_update",
     actionCategory: "content_moderation",
@@ -289,7 +314,7 @@ async function updateReport(req, res) {
     details: { reason, additionalNotes: adminNotes },
   });
 
-  res.json(report);
+  res.json(normalizeReportForAdminJson(report));
 }
 
 async function listFlagged(req, res) {
@@ -366,7 +391,7 @@ async function updateFloraStatus(req, res) {
   }
   await flora.save();
 
-  await logAdminAction({
+  await logAdminActionSafe({
     req,
     action: "flora_status_update",
     actionCategory: "content_moderation",
@@ -411,7 +436,7 @@ async function batchUpdateFloras(req, res) {
         await flora.deleteOne();
       }
       results.updated++;
-      await logAdminAction({
+      await logAdminActionSafe({
         req,
         action: `flora_batch_${action}`,
         actionCategory: "content_moderation",
@@ -440,18 +465,27 @@ async function batchUpdateReports(req, res) {
   const results = { updated: 0, failed: [] };
   for (const id of ids) {
     try {
-      const report = await Report.findById(id);
+      if (!mongoose.Types.ObjectId.isValid(String(id).trim())) {
+        results.failed.push(id);
+        continue;
+      }
+      const report = await Report.findByIdAndUpdate(
+        String(id).trim(),
+        {
+          $set: {
+            status,
+            "resolution.resolvedBy": req.user._id,
+            "resolution.resolvedAt": new Date(),
+          },
+        },
+        { new: true, runValidators: true }
+      );
       if (!report) {
         results.failed.push(id);
         continue;
       }
-      report.status = status;
-      report.resolution = report.resolution || {};
-      report.resolution.resolvedBy = req.user._id;
-      report.resolution.resolvedAt = new Date();
-      await report.save();
       results.updated++;
-      await logAdminAction({
+      await logAdminActionSafe({
         req,
         action: `report_batch_${action}`,
         actionCategory: "content_moderation",
@@ -493,7 +527,7 @@ async function batchUpdateUsers(req, res) {
       user.accountStatus = status;
       await user.save();
       results.updated++;
-      await logAdminAction({
+      await logAdminActionSafe({
         req,
         action: `user_batch_${action}`,
         actionCategory: "user_management",
