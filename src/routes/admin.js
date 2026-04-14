@@ -33,13 +33,14 @@ router.delete("/users/:id", softDeleteUser);
 
 router.get("/reports", listReports);
 router.get("/reports/signal", getReportSignal);
+// Static paths before :id — otherwise "batch" is matched as report id.
+router.patch("/reports/batch", batchUpdateReports);
 router.patch("/reports/:id", updateReport);
 
 router.get("/flagged", listFlagged);
 router.get("/floras", listAdminFloras);
-router.patch("/floras/:id/status", updateFloraStatus);
 router.patch("/floras/batch", batchUpdateFloras);
-router.patch("/reports/batch", batchUpdateReports);
+router.patch("/floras/:id/status", updateFloraStatus);
 router.patch("/users/batch", batchUpdateUsers);
 
 module.exports = router;
