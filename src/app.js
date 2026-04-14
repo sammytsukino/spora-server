@@ -13,21 +13,12 @@ const followRoutes = require("./routes/follows");
 const userRoutes = require("./routes/users");
 const readerRoutes = require("./routes/reader");
 const { notFound, errorHandler } = require("./middleware/error");
+const { parseCorsOrigin } = require("./lib/parseCorsOrigin");
+const { applyTrustProxyIfProduction } = require("./lib/trustProxy");
 
 const app = express();
 
-if (process.env.NODE_ENV === "production") {
-  app.set("trust proxy", 1);
-}
-
-function parseCorsOrigin() {
-  const raw = process.env.CORS_ORIGIN?.trim();
-  if (!raw) return true;
-  const list = raw.split(",").map((s) => s.trim()).filter(Boolean);
-  if (list.length === 0) return true;
-  if (list.length === 1) return list[0];
-  return list;
-}
+applyTrustProxyIfProduction(app);
 
 app.use(
   helmet({

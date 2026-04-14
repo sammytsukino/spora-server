@@ -16,6 +16,8 @@ module.exports = {
   coverageDirectory: "coverage",
   collectCoverageFrom: [
     "src/app.js",
+    "src/lib/parseCorsOrigin.js",
+    "src/lib/trustProxy.js",
     "src/middleware/**/*.js",
     "src/routes/**/*.js",
     "!src/**/*.test.js",
