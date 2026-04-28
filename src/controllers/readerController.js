@@ -1,12 +1,33 @@
 const Flora = require("../models/Flora");
 
+let voiceEnginePromise;
+
+async function getVoiceEngine() {
+  if (!voiceEnginePromise) {
+    voiceEnginePromise = import("voipi").then(({ VoiPi }) => {
+      return new VoiPi({
+        providers: ["edge-tts", "google-tts", "piper"],
+      });
+    });
+  }
+
+  return voiceEnginePromise;
+}
+
+function contentTypeForAudioExt(ext) {
+  switch ((ext || "").toLowerCase()) {
+    case ".wav":
+      return "audio/wav";
+    case ".aiff":
+    case ".aif":
+      return "audio/aiff";
+    case ".mp3":
+    default:
+      return "audio/mpeg";
+  }
+}
 
 async function postReaderTts(req, res) {
-  const apiKey = process.env.ELEVENLABS_API_KEY?.trim();
-  const voiceId = process.env.ELEVENLABS_VOICE_ID?.trim();
-  if (!apiKey || !voiceId) {
-    return res.status(503).json({ error: "Text-to-speech is not configured on this server" });
-  }
 
   const floraId = req.body?.floraId;
   if (!floraId || typeof floraId !== "string") {
@@ -35,8 +56,6 @@ async function postReaderTts(req, res) {
     toRead = `${toRead.slice(0, MAX_CHARS)}…`;
   }
 
-  const modelId = process.env.ELEVENLABS_MODEL_ID || "eleven_multilingual_v2";
-
   const rawSpeed = req.body?.speed;
   let speed = 1;
   if (typeof rawSpeed === "number" && Number.isFinite(rawSpeed)) {
@@ -48,39 +67,16 @@ async function postReaderTts(req, res) {
   
   speed = Math.min(1.35, Math.max(0.65, speed));
 
-  let elRes;
   try {
-    elRes = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}`,
-      {
-        method: "POST",
-        headers: {
-          "xi-api-key": apiKey,
-          "Content-Type": "application/json",
-          Accept: "audio/mpeg",
-        },
-        body: JSON.stringify({
-          text: toRead,
-          model_id: modelId,
-          voice_settings: { speed },
-        }),
-      }
-    );
-  } catch (err) {
-    console.error("ElevenLabs TTS fetch error:", err?.message || err);
-    return res.status(502).json({ error: "Voice service unreachable" });
-  }
+    const voice = await getVoiceEngine();
+    const audio = await voice.toAudio(toRead, { rate: speed });
 
-  if (!elRes.ok) {
-    const errBody = await elRes.text();
-    console.error("ElevenLabs TTS error:", elRes.status, errBody.slice(0, 500));
+    res.setHeader("Content-Type", contentTypeForAudioExt(audio.ext));
+    res.send(audio.data);
+  } catch (err) {
+    console.error("VoiPi TTS error:", err?.message || err);
     return res.status(502).json({ error: "Voice generation failed" });
   }
-
-  const arrayBuffer = await elRes.arrayBuffer();
-  const contentType = elRes.headers.get("content-type") || "audio/mpeg";
-  res.setHeader("Content-Type", contentType);
-  res.send(Buffer.from(arrayBuffer));
 }
 
 module.exports = { postReaderTts };

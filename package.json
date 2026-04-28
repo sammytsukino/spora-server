@@ -25,7 +25,8 @@
     "mongodb": "^7.1.0",
     "mongoose": "^8.8.1",
     "morgan": "^1.10.0",
-    "nodemailer": "^8.0.1"
+    "nodemailer": "^8.0.1",
+    "voipi": "^0.0.12"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",

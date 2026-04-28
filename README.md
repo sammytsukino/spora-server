@@ -31,7 +31,7 @@ This repository provides:
 ♦ Social graph operations (follow/unfollow)  
 ♦ Moderation and stewardship operations  
 ♦ Verification and notification flows  
-♦ Optional media/voice integrations (Cloudinary + ElevenLabs)
+♦ Optional media/voice integrations (Cloudinary + VoiPi)
 
 ⟡ ═════════════════════════════════════════ ⟡
 
@@ -57,7 +57,7 @@ This repository provides:
 
 ### Optional Integrations
 ▸ Cloudinary for avatar/flora thumbnail uploads  
-▸ ElevenLabs for `/api/reader/tts` audio generation
+▸ VoiPi for `/api/reader/tts` audio generation
 
 ⟡ ═════════════════════════════════════════ ⟡
 
@@ -88,7 +88,7 @@ The API is organized as a set of bounded domains:
 ▸ `DELETE /api/floras/:id`
 
 ### Reader
-▸ `POST /api/reader/tts` (requires ElevenLabs env configuration)
+▸ `POST /api/reader/tts` (powered by VoiPi provider fallback)
 
 ### Social
 ▸ `GET /api/follows/me/following`  
@@ -184,10 +184,8 @@ CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
 
-# ElevenLabs for Flora Reader TTS
-ELEVENLABS_API_KEY=
-ELEVENLABS_VOICE_ID=
-ELEVENLABS_MODEL_ID=eleven_multilingual_v2
+# Reader TTS uses VoiPi (no API key required by default)
+# It will try edge-tts, then google-tts, then piper.
 ```
 
 Important startup constraints:

@@ -9,11 +9,7 @@ connectDb()
   .then(() => {
     app.listen(port, () => {
       console.log(`Spora backend listening on port ${port}`);
-      if (!process.env.ELEVENLABS_API_KEY?.trim() || !process.env.ELEVENLABS_VOICE_ID?.trim()) {
-        console.log(
-          "[reader/tts] ElevenLabs not configured: set ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID in spora-server/.env"
-        );
-      }
+      console.log("[reader/tts] VoiPi enabled with provider fallback: edge-tts -> google-tts -> piper");
     });
   })
   .catch((err) => {
