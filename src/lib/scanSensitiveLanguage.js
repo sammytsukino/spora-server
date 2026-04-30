@@ -16,10 +16,12 @@ function loadTermsFromFile(filePath = defaultTermsPath()) {
     }
     const raw = fs.readFileSync(filePath, "utf8");
     const data = JSON.parse(raw);
-    const list = Array.isArray(data.terms) ? data.terms.map((t) => String(t).trim()).filter(Boolean) : [];
-    cachedTerms = list;
+    const termList = Array.isArray(data.terms)
+      ? data.terms.map((term) => String(term).trim()).filter(Boolean)
+      : [];
+    cachedTerms = termList;
     cachedMtime = stat.mtimeMs;
-    return list;
+    return termList;
   } catch {
     return [];
   }
@@ -52,7 +54,7 @@ function scanSensitiveLanguage(opts = {}) {
   const text = opts.text ?? "";
   let terms;
   if (Array.isArray(opts.terms) && opts.terms.length > 0) {
-    terms = opts.terms.map((t) => String(t).trim()).filter(Boolean);
+    terms = opts.terms.map((term) => String(term).trim()).filter(Boolean);
   } else if (opts.termsPath) {
     terms = loadTermsFromFile(opts.termsPath);
   } else {
@@ -69,17 +71,17 @@ function scanSensitiveLanguage(opts = {}) {
   let textHits = 0;
 
   for (const raw of terms) {
-    const t = raw.toLowerCase();
-    const parts = t.split(/\s+/).filter(Boolean);
+    const normalizedTerm = raw.toLowerCase();
+    const parts = normalizedTerm.split(/\s+/).filter(Boolean);
     if (parts.length === 0) continue;
 
     let inTitle = false;
     let inText = false;
 
     if (parts.length === 1) {
-      const w = parts[0];
-      inTitle = wordInTokens(w, titleTokens);
-      inText = wordInTokens(w, textTokens);
+      const singleWord = parts[0];
+      inTitle = wordInTokens(singleWord, titleTokens);
+      inText = wordInTokens(singleWord, textTokens);
     } else {
       const phrase = parts.join(" ");
       inTitle = phraseMatchesField(phrase, titleLower);

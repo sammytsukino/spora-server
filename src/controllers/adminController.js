@@ -108,30 +108,30 @@ async function getUsageCharts(req, res) {
   const now = new Date();
   const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const florasByDay = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    d.setHours(0, 0, 0, 0);
-    const next = new Date(d);
-    next.setDate(next.getDate() + 1);
+  for (let dayOffset = 6; dayOffset >= 0; dayOffset--) {
+    const dayStart = new Date(now);
+    dayStart.setDate(dayStart.getDate() - dayOffset);
+    dayStart.setHours(0, 0, 0, 0);
+    const nextDayStart = new Date(dayStart);
+    nextDayStart.setDate(nextDayStart.getDate() + 1);
     const count = await Flora.countDocuments({
       isDeleted: { $ne: true },
-      createdAt: { $gte: d, $lt: next },
+      createdAt: { $gte: dayStart, $lt: nextDayStart },
     });
-    florasByDay.push({ label: dayLabels[d.getDay()], value: count });
+    florasByDay.push({ label: dayLabels[dayStart.getDay()], value: count });
   }
 
   const newUsersByWeek = [];
-  for (let w = 3; w >= 0; w--) {
+  for (let weekOffset = 3; weekOffset >= 0; weekOffset--) {
     const start = new Date(now);
-    start.setDate(start.getDate() - (w + 1) * 7);
+    start.setDate(start.getDate() - (weekOffset + 1) * 7);
     start.setHours(0, 0, 0, 0);
     const end = new Date(start);
     end.setDate(end.getDate() + 7);
     const count = await User.countDocuments({
       createdAt: { $gte: start, $lt: end },
     });
-    newUsersByWeek.push({ label: `W${4 - w}`, value: count });
+    newUsersByWeek.push({ label: `W${4 - weekOffset}`, value: count });
   }
 
   res.json({ florasByDay, newUsersByWeek });
@@ -151,9 +151,9 @@ async function listUsers(req, res) {
     .lean();
 
   const usersWithCounts = await Promise.all(
-    users.map(async (u) => {
-      const florasCount = await Flora.countDocuments({ authorId: u._id });
-      return { ...u, florasCount };
+    users.map(async (userDoc) => {
+      const florasCount = await Flora.countDocuments({ authorId: userDoc._id });
+      return { ...userDoc, florasCount };
     })
   );
 
@@ -258,7 +258,7 @@ async function listReports(req, res) {
     .limit(parseInt(limit) || 50)
     .skip(parseInt(skip) || 0);
 
-  const normalized = reports.map((r) => normalizeReportForAdminJson(r));
+  const normalized = reports.map((reportDoc) => normalizeReportForAdminJson(reportDoc));
 
   res.json(normalized);
 }
@@ -335,12 +335,12 @@ async function listFlagged(req, res) {
     .lean();
 
   const florasWithReports = await Promise.all(
-    floras.map(async (f) => {
+    floras.map(async (floraDoc) => {
       const reportCount = await Report.countDocuments({
-        reportedFloraId: f._id,
+        reportedFloraId: floraDoc._id,
         status: "pending",
       });
-      return { ...f, reportCount, author: f.authorId };
+      return { ...floraDoc, reportCount, author: floraDoc.authorId };
     })
   );
 
@@ -361,16 +361,16 @@ async function listAdminFloras(req, res) {
     .skip(parseInt(String(skip), 10) || 0)
     .lean();
 
-  const withAuthorDisplay = floras.map((f) => {
+  const withAuthorDisplay = floras.map((floraDoc) => {
     const authorName =
-      f.isAuthorAnonymized || f.authorUsername
-        ? f.authorUsername || "@Anonymous"
-        : f.authorId?.username
-          ? f.authorId.username.startsWith("@")
-            ? f.authorId.username
-            : `@${f.authorId.username}`
+      floraDoc.isAuthorAnonymized || floraDoc.authorUsername
+        ? floraDoc.authorUsername || "@Anonymous"
+        : floraDoc.authorId?.username
+          ? floraDoc.authorId.username.startsWith("@")
+            ? floraDoc.authorId.username
+            : `@${floraDoc.authorId.username}`
           : "@Anonymous";
-    return { ...f, authorUsername: authorName };
+    return { ...floraDoc, authorUsername: authorName };
   });
 
   res.json(withAuthorDisplay);

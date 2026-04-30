@@ -61,8 +61,8 @@ async function postReaderTts(req, res) {
   if (typeof rawSpeed === "number" && Number.isFinite(rawSpeed)) {
     speed = rawSpeed;
   } else if (typeof rawSpeed === "string" && rawSpeed.trim() !== "") {
-    const n = parseFloat(rawSpeed);
-    if (Number.isFinite(n)) speed = n;
+    const parsedSpeed = parseFloat(rawSpeed);
+    if (Number.isFinite(parsedSpeed)) speed = parsedSpeed;
   }
   
   speed = Math.min(1.35, Math.max(0.65, speed));

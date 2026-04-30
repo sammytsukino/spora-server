@@ -62,7 +62,7 @@ async function listFloras(req, res) {
       return res.status(401).json({ error: "Authentication required" });
     }
     const follows = await Follow.find({ followerId: req.user._id }).select("followingId").lean();
-    const followedIds = follows.map((f) => f.followingId);
+    const followedIds = follows.map((followDoc) => followDoc.followingId);
     if (followedIds.length === 0) {
       return res.json([]);
     }

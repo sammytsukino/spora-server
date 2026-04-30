@@ -29,7 +29,7 @@ async function createReport(req, res) {
       User.findById(req.user._id).select("username").lean(),
     ]);
     const recipients = admins
-      .map((a) => a.email)
+      .map((adminUser) => adminUser.email)
       .filter((email) => typeof email === "string" && email.trim() !== "");
     if (recipients.length > 0) {
       await sendAdminNewReportEmail({

@@ -44,8 +44,8 @@ async function unfollow(req, res) {
 
 async function getFollowingIds(req, res) {
   const follows = await Follow.find({ followerId: req.user._id }).select("followingId").lean();
-  const ids = follows.map((f) => f.followingId.toString());
-  res.json({ followingIds: ids });
+  const followingIds = follows.map((followDoc) => followDoc.followingId.toString());
+  res.json({ followingIds });
 }
 
 async function getFollowers(req, res) {
@@ -61,13 +61,13 @@ async function getFollowers(req, res) {
     .lean();
 
   const users = follows
-    .map((f) => f.followerId)
+    .map((followDoc) => followDoc.followerId)
     .filter(Boolean)
-    .map((u) => ({
-      id: u._id,
-      username: u.username,
-      displayName: u.displayName,
-      avatar: u.avatar,
+    .map((userDoc) => ({
+      id: userDoc._id,
+      username: userDoc.username,
+      displayName: userDoc.displayName,
+      avatar: userDoc.avatar,
     }));
 
   res.json(users);
@@ -86,13 +86,13 @@ async function getFollowing(req, res) {
     .lean();
 
   const users = follows
-    .map((f) => f.followingId)
+    .map((followDoc) => followDoc.followingId)
     .filter(Boolean)
-    .map((u) => ({
-      id: u._id,
-      username: u.username,
-      displayName: u.displayName,
-      avatar: u.avatar,
+    .map((userDoc) => ({
+      id: userDoc._id,
+      username: userDoc.username,
+      displayName: userDoc.displayName,
+      avatar: userDoc.avatar,
     }));
 
   res.json(users);
