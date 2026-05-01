@@ -14,6 +14,7 @@
 - [Available Scripts](#-available-scripts)
 - [Project Structure](#-project-structure)
 - [Language Support](#-language-support)
+- [Clean Code Guidelines](#-clean-code-guidelines)
 - [Domain and Policy Notes](#-domain-and-policy-notes)
 - [Testing Notes](#-testing-notes)
 - [License](#-license)
@@ -247,6 +248,42 @@ SPORA currently operates with mixed UI/content strings and supports usage in:
 ▸ **Castellano**
 
 This includes user-facing content and editorial copy currently present across the project.
+
+⟡ ═════════════════════════════════════════ ⟡
+
+## ◈ Clean Code Guidelines
+
+These conventions keep `spora-server` maintainable and aligned with current architecture:
+
+### 1) Keep domain boundaries clear
+▸ `routes/` only wires endpoints and middleware  
+▸ `controllers/` handle request/response orchestration  
+▸ `services/` own reusable cross-domain logic (email, moderation helpers, etc.)  
+▸ `models/` remain focused on schema/domain shape
+
+### 2) Validate early, fail explicitly
+▸ Validate required input fields at controller entry  
+▸ Return precise HTTP status + concise error messages  
+▸ Avoid silent fallbacks unless explicitly intended for non-critical integrations
+
+### 3) Preserve platform invariants
+▸ Keep lineage/moderation/auth rules explicit (not implicit in side effects)  
+▸ Protect role/account-status checks close to route boundaries  
+▸ Use small helpers for repeated policy logic
+
+### 4) Prefer readable constants over magic values
+▸ Extract limits/time windows/status names into named constants  
+▸ Use descriptive names (`MAX_MESSAGE_LENGTH`, `ACCESS_TOKEN_EXPIRY`) over inline literals
+
+### 5) Keep async flows understandable
+▸ Use early returns to reduce nesting  
+▸ Group independent async calls with `Promise.all` where safe  
+▸ Log integration failures with context (SMTP/Cloudinary/TTS) without leaking sensitive data
+
+### 6) Protect API contracts
+▸ Update README and route docs when endpoint behavior changes  
+▸ Keep response shapes stable for frontend consumers  
+▸ Add or update tests for changed auth/moderation/email-critical paths
 
 ⟡ ═════════════════════════════════════════ ⟡
 
