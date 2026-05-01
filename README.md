@@ -13,6 +13,7 @@
 - [Getting Started](#-getting-started)
 - [Available Scripts](#-available-scripts)
 - [Project Structure](#-project-structure)
+- [Language Support](#-language-support)
 - [Domain and Policy Notes](#-domain-and-policy-notes)
 - [Testing Notes](#-testing-notes)
 - [License](#-license)
@@ -31,6 +32,7 @@ This repository provides:
 ♦ Social graph operations (follow/unfollow)  
 ♦ Moderation and stewardship operations  
 ♦ Verification and notification flows  
+♦ Contact form email delivery to active admins  
 ♦ Optional media/voice integrations (Cloudinary + VoiPi)
 
 ⟡ ═════════════════════════════════════════ ⟡
@@ -75,9 +77,7 @@ The API is organized as a set of bounded domains:
 ▸ `POST /api/auth/logout`  
 ▸ `GET /api/auth/me`  
 ▸ `PATCH /api/auth/me`  
-▸ `GET|POST /api/auth/verify-email`  
-▸ `POST /api/auth/resend-verification`  
-▸ `POST /api/auth/me/unsign`
+▸ `GET|POST /api/auth/verify-email`
 
 ### Floras
 ▸ `GET /api/floras`  
@@ -98,6 +98,9 @@ The API is organized as a set of bounded domains:
 
 ### Reports
 ▸ `POST /api/reports`
+
+### Contact
+▸ `POST /api/contact` (public contact form -> notification emails to active admins)
 
 ### Admin
 ▸ `GET /api/admin/floras` + moderation updates  
@@ -171,7 +174,8 @@ Also supported (optional / feature-dependent):
 # Legacy Mongo alias also accepted
 MONGO_URL=
 
-# SMTP for account verification emails
+# SMTP for transactional emails
+# (account verification + admin report alerts + admin contact alerts)
 SMTP_HOST=
 SMTP_PORT=587
 SMTP_SECURE=false
@@ -233,6 +237,16 @@ spora-server/
 ├── postman_collection.json       # API testing collection
 └── README.md
 ```
+
+⟡ ═════════════════════════════════════════ ⟡
+
+## ◈ Language Support
+
+SPORA currently operates with mixed UI/content strings and supports usage in:
+▸ **Español**  
+▸ **Castellano**
+
+This includes user-facing content and editorial copy currently present across the project.
 
 ⟡ ═════════════════════════════════════════ ⟡
 
