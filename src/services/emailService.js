@@ -137,9 +137,60 @@ async function sendAdminNewReportEmail({
   });
 }
 
+async function sendAdminContactEmail({
+  recipients,
+  name,
+  email,
+  subject,
+  message,
+}) {
+  if (!Array.isArray(recipients) || recipients.length === 0) return;
+  if (!transporter) {
+    console.warn(
+      "[Email] SMTP not configured. Admin contact notification skipped."
+    );
+    return;
+  }
+
+  const adminSubject = `[SPORA Contact] ${subject}`;
+  const text = [
+    "New contact form submission received.",
+    "",
+    `Name: ${name}`,
+    `Email: ${email}`,
+    `Subject: ${subject}`,
+    "",
+    "Message:",
+    message,
+  ].join("\n");
+
+  const html = `
+    <div style="font-family: sans-serif; max-width: 640px; margin: 0 auto;">
+      <h2>New SPORA contact message</h2>
+      <p><strong>Name:</strong> ${name}</p>
+      <p><strong>Email:</strong> ${email}</p>
+      <p><strong>Subject:</strong> ${subject}</p>
+      <p><strong>Message:</strong></p>
+      <div style="padding: 12px; background: #f5f5f5; border: 1px solid #ddd; white-space: pre-wrap;">
+        ${message}
+      </div>
+    </div>
+  `;
+
+  await transporter.sendMail({
+    from: process.env.SMTP_FROM || "SPORA <noreply@spora.app>",
+    to: recipients.join(","),
+    replyTo: email,
+    subject: adminSubject,
+    text,
+    html,
+  });
+}
+
 module.exports = {
   generateVerificationToken,
   sendVerificationEmail,
   sendVerificationEmailToUser,
   sendAdminNewReportEmail,
+  sendAdminContactEmail,
 };
