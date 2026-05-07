@@ -14,6 +14,8 @@ const {
 const {
   generateVerificationToken,
   sendVerificationEmail,
+  isEmailConfigured,
+  buildVerifyUrl,
 } = require("../services/emailService");
 
 if (
@@ -76,11 +78,45 @@ async function signUp(req, res) {
     emailVerificationExpires: expiresAt,
   });
 
-  await sendVerificationEmail(user.email, verificationToken);
+  if (process.env.NODE_ENV !== "production") {
+    console.log(
+      `[Signup][debug] email=${user.email} plainToken=${verificationToken} storedHash=${verificationTokenHash}`
+    );
+  }
+
+  let emailSent = false;
+  try {
+    emailSent = await sendVerificationEmail(user.email, verificationToken);
+  } catch (err) {
+    console.error("[Signup] Verification email failed:", err?.message || err);
+    await User.findByIdAndDelete(user._id);
+    return res.status(502).json({
+      error: "Could not send verification email. Try again later.",
+      code: "EMAIL_DELIVERY_FAILED",
+    });
+  }
+
+  if (!emailSent && process.env.NODE_ENV === "production") {
+    await User.findByIdAndDelete(user._id);
+    return res.status(503).json({
+      error:
+        "Email is not configured on this server. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM.",
+      code: "SMTP_NOT_CONFIGURED",
+    });
+  }
+
+  if (!emailSent) {
+    console.warn(
+      "[Signup] SMTP not configured (dev). Manual verify URL:",
+      buildVerifyUrl(verificationToken)
+    );
+  }
 
   res.status(201).json({
-    message: "Check your email to verify your account",
-    emailSent: true,
+    message: emailSent
+      ? "Check your email to verify your account"
+      : "Account created. SMTP is not configured locally — check the server console for the verification URL.",
+    emailSent,
   });
 }
 
@@ -237,42 +273,139 @@ async function updateProfile(req, res) {
   });
 }
 
+function buildAuthSuccessResponse(user) {
+  const accessToken = signAccessToken(user);
+  const refreshToken = signRefreshToken(user);
+  return {
+    accessToken,
+    refreshToken,
+    body: {
+      success: true,
+      token: accessToken,
+      user: {
+        id: user._id,
+        username: user.username,
+        displayName: user.displayName,
+        avatar: user.avatar,
+        email: user.email,
+        role: user.role,
+      },
+    },
+  };
+}
+
 async function verifyEmail(req, res) {
   const { token } = req.query;
   if (!token || typeof token !== "string") {
     return res.status(400).json({ error: "Missing or invalid token" });
   }
 
-  const user = await findUserForVerificationToken(token, User);
+  const trimmedToken = token.trim();
+  const user = await findUserForVerificationToken(trimmedToken, User);
 
   if (!user) {
+    const tokenHash = hashVerificationToken(trimmedToken);
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        `[VerifyEmail][debug] receivedPlain=${trimmedToken} computedHash=${tokenHash}`
+      );
+      const anyByEmail = await User.find({})
+        .select("email emailVerified emailVerificationToken emailVerificationExpires")
+        .sort({ createdAt: -1 })
+        .limit(3)
+        .lean();
+      console.log(
+        "[VerifyEmail][debug] last 3 users in DB:",
+        JSON.stringify(anyByEmail, null, 2)
+      );
+    }
+    const stale = await User.findOne({ emailVerificationToken: tokenHash });
+    if (stale) {
+      const expired =
+        stale.emailVerificationExpires &&
+        stale.emailVerificationExpires.getTime() <= Date.now();
+      console.warn(
+        `[VerifyEmail] Token matches user ${stale._id} but rejected (verified=${stale.emailVerified}, expired=${expired}).`
+      );
+      if (stale.emailVerified) {
+        const { refreshToken, body } = buildAuthSuccessResponse(stale);
+        setRefreshTokenCookie(res, refreshToken);
+        return res.json(body);
+      }
+    } else {
+      console.warn(
+        `[VerifyEmail] No user matches the provided token (length=${trimmedToken.length}).`
+      );
+    }
     return res.status(400).json({
       error: "Invalid or expired verification link",
       code: "VERIFICATION_FAILED",
     });
   }
 
-  user.emailVerified = true;
-  user.emailVerificationToken = undefined;
-  user.emailVerificationExpires = undefined;
+  if (!user.emailVerified) {
+    user.emailVerified = true;
+    user.emailVerificationExpires = undefined;
+    await user.save();
+  }
+
+  const { refreshToken, body } = buildAuthSuccessResponse(user);
+  setRefreshTokenCookie(res, refreshToken);
+  res.json(body);
+}
+
+async function resendVerification(req, res) {
+  const rawEmail = typeof req.body?.email === "string" ? req.body.email : "";
+  const email = rawEmail.trim().toLowerCase();
+  if (!email) {
+    return res.status(400).json({ error: "Email is required" });
+  }
+
+  const genericResponse = {
+    message: "If that email exists and is unverified, a new link has been sent.",
+  };
+
+  const user = await User.findOne({ email });
+  if (!user || user.emailVerified) {
+    if (user?.emailVerified) {
+      return res.status(409).json({ error: "Email is already verified" });
+    }
+    return res.json(genericResponse);
+  }
+
+  const verificationToken = generateVerificationToken();
+  user.emailVerificationToken = hashVerificationToken(verificationToken);
+  user.emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
   await user.save();
 
-  const accessToken = signAccessToken(user);
-  const refreshToken = signRefreshToken(user);
-  setRefreshTokenCookie(res, refreshToken);
+  if (!isEmailConfigured()) {
+    console.warn(
+      "[ResendVerification] SMTP not configured. Manual verify URL:",
+      buildVerifyUrl(verificationToken)
+    );
+    if (process.env.NODE_ENV === "production") {
+      return res.status(503).json({
+        error: "Email is not configured on this server.",
+        code: "SMTP_NOT_CONFIGURED",
+      });
+    }
+    return res.json({
+      ...genericResponse,
+      emailSent: false,
+    });
+  }
 
-  res.json({
-    success: true,
-    token: accessToken,
-    user: {
-      id: user._id,
-      username: user.username,
-      displayName: user.displayName,
-      avatar: user.avatar,
-      email: user.email,
-      role: user.role,
-    },
-  });
+  try {
+    await sendVerificationEmail(user.email, verificationToken);
+  } catch (err) {
+    console.error("[ResendVerification] Send failed:", err?.message || err);
+    return res.status(502).json({
+      error: "Could not send verification email. Try again later.",
+      code: "EMAIL_DELIVERY_FAILED",
+    });
+  }
+
+  res.json({ ...genericResponse, emailSent: true });
 }
 
 module.exports = {
@@ -283,4 +416,5 @@ module.exports = {
   me,
   updateProfile,
   verifyEmail,
+  resendVerification,
 };

@@ -1,7 +1,9 @@
 jest.mock("../models/User");
 jest.mock("../services/emailService", () => ({
   generateVerificationToken: jest.fn(() => "verify-token-abc"),
-  sendVerificationEmail: jest.fn().mockResolvedValue(undefined),
+  sendVerificationEmail: jest.fn().mockResolvedValue(true),
+  isEmailConfigured: jest.fn(() => true),
+  buildVerifyUrl: jest.fn((token) => `http://localhost:5173/verify-email?token=${token}`),
 }));
 
 const bcrypt = require("bcryptjs");
@@ -9,6 +11,16 @@ const request = require("supertest");
 const jwt = require("jsonwebtoken");
 const app = require("../app");
 const User = require("../models/User");
+const emailService = require("../services/emailService");
+
+beforeEach(() => {
+  emailService.generateVerificationToken.mockReturnValue("verify-token-abc");
+  emailService.sendVerificationEmail.mockResolvedValue(true);
+  emailService.isEmailConfigured.mockReturnValue(true);
+  emailService.buildVerifyUrl.mockImplementation(
+    (token) => `http://localhost:5173/verify-email?token=${token}`
+  );
+});
 
 describe("POST /api/auth/signup", () => {
   beforeEach(() => {
@@ -55,6 +67,111 @@ describe("POST /api/auth/signup", () => {
     });
 
     expect(res.status).toBe(409);
+  });
+
+  it("returns 502 and deletes user when SMTP send throws", async () => {
+    User.findOne.mockResolvedValue(null);
+    User.create.mockResolvedValue({ _id: "n2", username: "u", email: "u@e.com" });
+    User.findByIdAndDelete = jest.fn().mockResolvedValue(undefined);
+    emailService.sendVerificationEmail.mockRejectedValueOnce(new Error("smtp boom"));
+
+    const res = await request(app).post("/api/auth/signup").send({
+      username: "newuser",
+      displayName: "New",
+      email: "new@example.com",
+      password: "password123",
+    });
+
+    expect(res.status).toBe(502);
+    expect(res.body).toMatchObject({ code: "EMAIL_DELIVERY_FAILED" });
+    expect(User.findByIdAndDelete).toHaveBeenCalledWith("n2");
+  });
+
+  it("returns 201 with emailSent:false in dev when SMTP not configured", async () => {
+    User.findOne.mockResolvedValue(null);
+    User.create.mockResolvedValue({ _id: "n3", username: "u", email: "u@e.com" });
+    emailService.sendVerificationEmail.mockResolvedValueOnce(false);
+
+    const res = await request(app).post("/api/auth/signup").send({
+      username: "devuser",
+      displayName: "Dev",
+      email: "dev@example.com",
+      password: "password123",
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ emailSent: false });
+  });
+
+  it("returns 503 in production when SMTP not configured", async () => {
+    const prevEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    User.findOne.mockResolvedValue(null);
+    User.create.mockResolvedValue({ _id: "n4", username: "u", email: "u@e.com" });
+    User.findByIdAndDelete = jest.fn().mockResolvedValue(undefined);
+    emailService.sendVerificationEmail.mockResolvedValueOnce(false);
+
+    const res = await request(app).post("/api/auth/signup").send({
+      username: "produser",
+      displayName: "Prod",
+      email: "prod@example.com",
+      password: "password123",
+    });
+
+    process.env.NODE_ENV = prevEnv;
+    expect(res.status).toBe(503);
+    expect(res.body).toMatchObject({ code: "SMTP_NOT_CONFIGURED" });
+    expect(User.findByIdAndDelete).toHaveBeenCalledWith("n4");
+  });
+});
+
+describe("POST /api/auth/resend-verification", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("returns 400 when email is missing", async () => {
+    const res = await request(app).post("/api/auth/resend-verification").send({});
+    expect(res.status).toBe(400);
+  });
+
+  it("returns generic 200 when no matching unverified user (privacy-safe)", async () => {
+    User.findOne.mockResolvedValue(null);
+    const res = await request(app)
+      .post("/api/auth/resend-verification")
+      .send({ email: "ghost@example.com" });
+    expect(res.status).toBe(200);
+    expect(res.body.message).toMatch(/if that email/i);
+  });
+
+  it("returns 409 when user is already verified", async () => {
+    User.findOne.mockResolvedValue({ emailVerified: true });
+    const res = await request(app)
+      .post("/api/auth/resend-verification")
+      .send({ email: "verified@example.com" });
+    expect(res.status).toBe(409);
+  });
+
+  it("sends a new verification email when user exists and is unverified", async () => {
+    const save = jest.fn().mockResolvedValue();
+    User.findOne.mockResolvedValue({
+      _id: "u9",
+      email: "wait@example.com",
+      emailVerified: false,
+      save,
+    });
+
+    const res = await request(app)
+      .post("/api/auth/resend-verification")
+      .send({ email: "wait@example.com" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ emailSent: true });
+    expect(save).toHaveBeenCalled();
+    expect(emailService.sendVerificationEmail).toHaveBeenCalledWith(
+      "wait@example.com",
+      "verify-token-abc"
+    );
   });
 });
 

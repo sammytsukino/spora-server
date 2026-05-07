@@ -34,8 +34,24 @@ function generateVerificationToken() {
   return crypto.randomBytes(32).toString("hex");
 }
 
+function isEmailConfigured() {
+  return Boolean(transporter);
+}
+
+function buildVerifyUrl(token) {
+  return `${FRONTEND_URL}/verify-email?token=${encodeURIComponent(token)}`;
+}
+
 async function sendVerificationEmail(email, token) {
-  const verifyUrl = `${FRONTEND_URL}/verify-email?token=${encodeURIComponent(token)}`;
+  const verifyUrl = buildVerifyUrl(token);
+
+  if (!transporter) {
+    console.warn(
+      "[Email] SMTP not configured. Verification link (DEV ONLY):",
+      verifyUrl
+    );
+    return false;
+  }
 
   const mailOptions = {
     from: process.env.SMTP_FROM || "SPORA <noreply@spora.app>",
@@ -57,15 +73,8 @@ async function sendVerificationEmail(email, token) {
     `,
   };
 
-  if (!transporter) {
-    console.warn(
-      "[Email] SMTP not configured. Verification link (for dev):",
-      verifyUrl
-    );
-    return;
-  }
-
   await transporter.sendMail(mailOptions);
+  return true;
 }
 
 async function sendVerificationEmailToUser(user) {
@@ -193,4 +202,6 @@ module.exports = {
   sendVerificationEmailToUser,
   sendAdminNewReportEmail,
   sendAdminContactEmail,
+  isEmailConfigured,
+  buildVerifyUrl,
 };
