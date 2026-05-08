@@ -5,9 +5,12 @@ const request = require("supertest");
 const jwt = require("jsonwebtoken");
 const app = require("../app");
 const User = require("../models/User");
-
-const STRONG_PASSWORD = "Sp0ra!Garden2026";
-const WEAK_PASSWORD = "password123";
+const {
+  STRONG_FIXTURE,
+  TOO_SHORT_FIXTURE,
+  SIMPLE_LOGIN_FIXTURE,
+  SIMPLE_WRONG_FIXTURE,
+} = require("../test-utils/passwordFixtures");
 
 describe("POST /api/auth/signup", () => {
   beforeEach(() => {
@@ -20,14 +23,14 @@ describe("POST /api/auth/signup", () => {
     expect(res.body.error).toMatch(/missing/i);
   });
 
-  it("returns 400 with WEAK_PASSWORD when password is too weak", async () => {
+  it("returns 400 with WEAK_PASSWORD code when password is too weak", async () => {
     User.findOne.mockResolvedValue(null);
 
     const res = await request(app).post("/api/auth/signup").send({
       username: "newuser",
       displayName: "New",
       email: "new@example.com",
-      password: WEAK_PASSWORD,
+      password: TOO_SHORT_FIXTURE,
     });
 
     expect(res.status).toBe(400);
@@ -49,7 +52,7 @@ describe("POST /api/auth/signup", () => {
       username: "newuser",
       displayName: "New",
       email: "new@example.com",
-      password: STRONG_PASSWORD,
+      password: STRONG_FIXTURE,
     });
 
     expect(res.status).toBe(201);
@@ -70,7 +73,7 @@ describe("POST /api/auth/signup", () => {
       username: "x",
       displayName: "X",
       email: "x@e.com",
-      password: STRONG_PASSWORD,
+      password: STRONG_FIXTURE,
     });
 
     expect(res.status).toBe(409);
@@ -83,7 +86,7 @@ describe("POST /api/auth/signin", () => {
   });
 
   it("returns 401 for bad password", async () => {
-    const hash = await bcrypt.hash("right", 4);
+    const hash = await bcrypt.hash(SIMPLE_LOGIN_FIXTURE, 4);
     User.findOne.mockResolvedValue({
       username: "u",
       password: hash,
@@ -94,7 +97,7 @@ describe("POST /api/auth/signin", () => {
 
     const res = await request(app).post("/api/auth/signin").send({
       username: "u",
-      password: "wrong",
+      password: SIMPLE_WRONG_FIXTURE,
     });
 
     expect(res.status).toBe(401);
@@ -102,7 +105,7 @@ describe("POST /api/auth/signin", () => {
   });
 
   it("signs in regardless of legacy emailVerified flag", async () => {
-    const hash = await bcrypt.hash("secretpass", 4);
+    const hash = await bcrypt.hash(SIMPLE_LOGIN_FIXTURE, 4);
     User.findOne.mockResolvedValue({
       _id: "507f1f77bcf86cd799439011",
       username: "u",
@@ -118,7 +121,7 @@ describe("POST /api/auth/signin", () => {
 
     const res = await request(app).post("/api/auth/signin").send({
       username: "u",
-      password: "secretpass",
+      password: SIMPLE_LOGIN_FIXTURE,
     });
 
     expect(res.status).toBe(200);

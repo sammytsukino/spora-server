@@ -1,4 +1,13 @@
 const { validatePassword, PASSWORD_MIN_LENGTH } = require("./passwordPolicy");
+const {
+  STRONG_FIXTURE,
+  TOO_SHORT_FIXTURE,
+  NO_UPPER_FIXTURE,
+  NO_LOWER_FIXTURE,
+  NO_DIGIT_FIXTURE,
+  NO_SPECIAL_FIXTURE,
+  WHITESPACE_FIXTURE,
+} = require("../test-utils/passwordFixtures");
 
 describe("validatePassword", () => {
   it("rejects non-string input", () => {
@@ -6,32 +15,32 @@ describe("validatePassword", () => {
   });
 
   it("rejects passwords shorter than the minimum", () => {
-    expect(validatePassword("Aa1!")).toMatch(
+    expect(validatePassword(TOO_SHORT_FIXTURE)).toMatch(
       new RegExp(`at least ${PASSWORD_MIN_LENGTH}`)
     );
   });
 
   it("rejects passwords without lowercase", () => {
-    expect(validatePassword("ABCDEF1234!")).toMatch(/lowercase/i);
+    expect(validatePassword(NO_LOWER_FIXTURE)).toMatch(/lowercase/i);
   });
 
   it("rejects passwords without uppercase", () => {
-    expect(validatePassword("abcdef1234!")).toMatch(/uppercase/i);
+    expect(validatePassword(NO_UPPER_FIXTURE)).toMatch(/uppercase/i);
   });
 
   it("rejects passwords without a number", () => {
-    expect(validatePassword("Abcdefghi!")).toMatch(/number/i);
+    expect(validatePassword(NO_DIGIT_FIXTURE)).toMatch(/number/i);
   });
 
   it("rejects passwords without a special character", () => {
-    expect(validatePassword("Abcdefghi1")).toMatch(/special/i);
+    expect(validatePassword(NO_SPECIAL_FIXTURE)).toMatch(/special/i);
   });
 
   it("rejects passwords containing whitespace", () => {
-    expect(validatePassword("Sp0ra! Test")).toMatch(/spaces/i);
+    expect(validatePassword(WHITESPACE_FIXTURE)).toMatch(/spaces/i);
   });
 
   it("accepts a password that meets every rule", () => {
-    expect(validatePassword("Sp0ra!Garden2026")).toBeNull();
+    expect(validatePassword(STRONG_FIXTURE)).toBeNull();
   });
 });
