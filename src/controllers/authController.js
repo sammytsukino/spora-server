@@ -3,20 +3,11 @@ const jwt = require("jsonwebtoken");
 const { v2: cloudinary } = require("cloudinary");
 const User = require("../models/User");
 const {
-  hashVerificationToken,
-  findUserForVerificationToken,
-} = require("../lib/verificationToken");
-const {
   setRefreshTokenCookie,
   clearRefreshTokenCookie,
   getRefreshTokenFromRequest,
 } = require("../lib/refreshCookie");
-const {
-  generateVerificationToken,
-  sendVerificationEmail,
-  isEmailConfigured,
-  buildVerifyUrl,
-} = require("../services/emailService");
+const { validatePassword } = require("../lib/passwordPolicy");
 
 if (
   process.env.CLOUDINARY_CLOUD_NAME &&
@@ -49,10 +40,29 @@ function signRefreshToken(user) {
   );
 }
 
+function publicUser(user) {
+  return {
+    id: user._id,
+    username: user.username,
+    displayName: user.displayName,
+    avatar: user.avatar,
+    email: user.email,
+    role: user.role,
+  };
+}
+
 async function signUp(req, res) {
   const { username, displayName, email, password } = req.body;
   if (!username || !email || !password) {
     return res.status(400).json({ error: "Missing fields" });
+  }
+
+  const passwordError = validatePassword(password);
+  if (passwordError) {
+    return res.status(400).json({
+      error: passwordError,
+      code: "WEAK_PASSWORD",
+    });
   }
 
   const existing = await User.findOne({
@@ -63,60 +73,22 @@ async function signUp(req, res) {
   }
 
   const hash = await bcrypt.hash(password, 10);
-  const verificationToken = generateVerificationToken();
-  const verificationTokenHash = hashVerificationToken(verificationToken);
-  const expiresAt = new Date();
-  expiresAt.setHours(expiresAt.getHours() + 24);
-
   const user = await User.create({
     username,
     displayName,
     email: email.toLowerCase(),
     password: hash,
-    emailVerified: false,
-    emailVerificationToken: verificationTokenHash,
-    emailVerificationExpires: expiresAt,
+    emailVerified: true,
   });
 
-  if (process.env.NODE_ENV !== "production") {
-    console.log(
-      `[Signup][debug] email=${user.email} plainToken=${verificationToken} storedHash=${verificationTokenHash}`
-    );
-  }
-
-  let emailSent = false;
-  try {
-    emailSent = await sendVerificationEmail(user.email, verificationToken);
-  } catch (err) {
-    console.error("[Signup] Verification email failed:", err?.message || err);
-    await User.findByIdAndDelete(user._id);
-    return res.status(502).json({
-      error: "Could not send verification email. Try again later.",
-      code: "EMAIL_DELIVERY_FAILED",
-    });
-  }
-
-  if (!emailSent && process.env.NODE_ENV === "production") {
-    await User.findByIdAndDelete(user._id);
-    return res.status(503).json({
-      error:
-        "Email is not configured on this server. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM.",
-      code: "SMTP_NOT_CONFIGURED",
-    });
-  }
-
-  if (!emailSent) {
-    console.warn(
-      "[Signup] SMTP not configured (dev). Manual verify URL:",
-      buildVerifyUrl(verificationToken)
-    );
-  }
+  const token = signAccessToken(user);
+  const refreshToken = signRefreshToken(user);
+  setRefreshTokenCookie(res, refreshToken);
 
   res.status(201).json({
-    message: emailSent
-      ? "Check your email to verify your account"
-      : "Account created. SMTP is not configured locally — check the server console for the verification URL.",
-    emailSent,
+    message: "Account created.",
+    token,
+    user: publicUser(user),
   });
 }
 
@@ -129,13 +101,6 @@ async function signIn(req, res) {
   const user = await User.findOne({ username: String(username).trim() });
   if (!user || user.accountStatus !== "active") {
     return res.status(401).json({ error: "Invalid credentials" });
-  }
-
-  if (user.emailVerified === false && user.role !== "admin") {
-    return res.status(403).json({
-      error: "Email not verified",
-      code: "EMAIL_NOT_VERIFIED",
-    });
   }
 
   const ok = await bcrypt.compare(password, user.password);
@@ -151,14 +116,7 @@ async function signIn(req, res) {
   setRefreshTokenCookie(res, refreshToken);
   res.json({
     token,
-    user: {
-      id: user._id,
-      username: user.username,
-      displayName: user.displayName,
-      avatar: user.avatar,
-      email: user.email,
-      role: user.role,
-    },
+    user: publicUser(user),
   });
 }
 
@@ -181,14 +139,7 @@ async function refresh(req, res) {
     setRefreshTokenCookie(res, newRefreshToken);
     res.json({
       token,
-      user: {
-        id: user._id,
-        username: user.username,
-        displayName: user.displayName,
-        avatar: user.avatar,
-        email: user.email,
-        role: user.role,
-      },
+      user: publicUser(user),
     });
   } catch {
     return res.status(401).json({ error: "Invalid refresh token" });
@@ -273,141 +224,6 @@ async function updateProfile(req, res) {
   });
 }
 
-function buildAuthSuccessResponse(user) {
-  const accessToken = signAccessToken(user);
-  const refreshToken = signRefreshToken(user);
-  return {
-    accessToken,
-    refreshToken,
-    body: {
-      success: true,
-      token: accessToken,
-      user: {
-        id: user._id,
-        username: user.username,
-        displayName: user.displayName,
-        avatar: user.avatar,
-        email: user.email,
-        role: user.role,
-      },
-    },
-  };
-}
-
-async function verifyEmail(req, res) {
-  const { token } = req.query;
-  if (!token || typeof token !== "string") {
-    return res.status(400).json({ error: "Missing or invalid token" });
-  }
-
-  const trimmedToken = token.trim();
-  const user = await findUserForVerificationToken(trimmedToken, User);
-
-  if (!user) {
-    const tokenHash = hashVerificationToken(trimmedToken);
-    if (process.env.NODE_ENV !== "production") {
-      console.log(
-        `[VerifyEmail][debug] receivedPlain=${trimmedToken} computedHash=${tokenHash}`
-      );
-      const anyByEmail = await User.find({})
-        .select("email emailVerified emailVerificationToken emailVerificationExpires")
-        .sort({ createdAt: -1 })
-        .limit(3)
-        .lean();
-      console.log(
-        "[VerifyEmail][debug] last 3 users in DB:",
-        JSON.stringify(anyByEmail, null, 2)
-      );
-    }
-    const stale = await User.findOne({ emailVerificationToken: tokenHash });
-    if (stale) {
-      const expired =
-        stale.emailVerificationExpires &&
-        stale.emailVerificationExpires.getTime() <= Date.now();
-      console.warn(
-        `[VerifyEmail] Token matches user ${stale._id} but rejected (verified=${stale.emailVerified}, expired=${expired}).`
-      );
-      if (stale.emailVerified) {
-        const { refreshToken, body } = buildAuthSuccessResponse(stale);
-        setRefreshTokenCookie(res, refreshToken);
-        return res.json(body);
-      }
-    } else {
-      console.warn(
-        `[VerifyEmail] No user matches the provided token (length=${trimmedToken.length}).`
-      );
-    }
-    return res.status(400).json({
-      error: "Invalid or expired verification link",
-      code: "VERIFICATION_FAILED",
-    });
-  }
-
-  if (!user.emailVerified) {
-    user.emailVerified = true;
-    user.emailVerificationExpires = undefined;
-    await user.save();
-  }
-
-  const { refreshToken, body } = buildAuthSuccessResponse(user);
-  setRefreshTokenCookie(res, refreshToken);
-  res.json(body);
-}
-
-async function resendVerification(req, res) {
-  const rawEmail = typeof req.body?.email === "string" ? req.body.email : "";
-  const email = rawEmail.trim().toLowerCase();
-  if (!email) {
-    return res.status(400).json({ error: "Email is required" });
-  }
-
-  const genericResponse = {
-    message: "If that email exists and is unverified, a new link has been sent.",
-  };
-
-  const user = await User.findOne({ email });
-  if (!user || user.emailVerified) {
-    if (user?.emailVerified) {
-      return res.status(409).json({ error: "Email is already verified" });
-    }
-    return res.json(genericResponse);
-  }
-
-  const verificationToken = generateVerificationToken();
-  user.emailVerificationToken = hashVerificationToken(verificationToken);
-  user.emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  await user.save();
-
-  if (!isEmailConfigured()) {
-    console.warn(
-      "[ResendVerification] SMTP not configured. Manual verify URL:",
-      buildVerifyUrl(verificationToken)
-    );
-    if (process.env.NODE_ENV === "production") {
-      return res.status(503).json({
-        error: "Email is not configured on this server.",
-        code: "SMTP_NOT_CONFIGURED",
-      });
-    }
-    return res.json({
-      ...genericResponse,
-      emailSent: false,
-    });
-  }
-
-  try {
-    await sendVerificationEmail(user.email, verificationToken);
-  } catch (err) {
-    console.error("[ResendVerification] Send failed:", err?.message || err);
-    return res.status(502).json({
-      error: "Could not send verification email. Try again later.",
-      code: "EMAIL_DELIVERY_FAILED",
-    });
-  }
-
-  res.json({ ...genericResponse, emailSent: true });
-}
-
 module.exports = {
   signUp,
   signIn,
@@ -415,6 +231,4 @@ module.exports = {
   logout,
   me,
   updateProfile,
-  verifyEmail,
-  resendVerification,
 };
