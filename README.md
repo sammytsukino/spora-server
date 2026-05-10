@@ -43,8 +43,9 @@ This repository provides:
 ### Runtime and Security
 ▸ Node.js + Express  
 ▸ MongoDB + Mongoose  
-▸ `helmet`, `cors`, `express-rate-limit`, `cookie-parser`  
+▸ `helmet`, `cors`, `express-rate-limit` (for brute-force prevention), `cookie-parser`  
 ▸ `express-async-errors` for async error propagation
+▸ Honeypot mechanism for invisible bot protection during signup
 
 ### Auth Model
 ▸ Access token (short-lived JWT, bearer)  

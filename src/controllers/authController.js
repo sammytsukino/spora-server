@@ -52,7 +52,18 @@ function publicUser(user) {
 }
 
 async function signUp(req, res) {
-  const { username, displayName, email, password } = req.body;
+  const { username, displayName, email, password, website } = req.body;
+  
+  // Honeypot check: If the hidden 'website' field is filled, it's a bot.
+  // We return a fake 201 Created to trick the bot into thinking it succeeded.
+  if (website) {
+    return res.status(201).json({
+      message: "Account created.",
+      token: "fake-bot-token",
+      user: { id: "bot", username, email, role: "cultivator" },
+    });
+  }
+
   if (!username || !email || !password) {
     return res.status(400).json({ error: "Missing fields" });
   }
