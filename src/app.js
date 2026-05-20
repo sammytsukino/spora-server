@@ -14,7 +14,7 @@ const userRoutes = require("./routes/users");
 const readerRoutes = require("./routes/reader");
 const contactRoutes = require("./routes/contact");
 const { notFound, errorHandler } = require("./middleware/error");
-const { parseCorsOrigin } = require("./lib/parseCorsOrigin");
+const { resolveCorsOrigin } = require("./lib/parseCorsOrigin");
 const { applyTrustProxyIfProduction } = require("./lib/trustProxy");
 
 const app = express();
@@ -28,7 +28,7 @@ app.use(
 );
 app.use(
   cors({
-    origin: parseCorsOrigin(),
+    origin: resolveCorsOrigin(),
     credentials: true,
   })
 );

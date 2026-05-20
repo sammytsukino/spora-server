@@ -1,12 +1,3 @@
-/**
- * Synthetic password fixtures for tests.
- *
- * IMPORTANT: do NOT inline string literals that look like real passwords in
- * test files. Secret scanners (GitGuardian, gitleaks, etc.) flag those even
- * when they're obviously fake test data. Build fixtures by composing
- * primitives so the source never contains a password-shaped string literal.
- */
-
 const upper = (n) => "A".repeat(n);
 const lower = (n) => "a".repeat(n);
 const digit = (n) => "1".repeat(n);

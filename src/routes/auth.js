@@ -11,8 +11,8 @@ const { requireAuth } = require("../middleware/auth");
 const rateLimit = require("express-rate-limit");
 
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 10, // Limit each IP to 10 requests per `window` (here, per 15 minutes)
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
   standardHeaders: true, 
   legacyHeaders: false,
   message: { error: "Too many requests from this IP, please try again later." }

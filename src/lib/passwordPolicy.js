@@ -2,11 +2,6 @@ const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_LENGTH = 128;
 const SPECIAL_CHAR_PATTERN = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]/;
 
-/**
- * Validates a candidate password against SPORA's signup policy.
- * Returns an error message string when the password is too weak,
- * or `null` when it satisfies every rule.
- */
 function validatePassword(password) {
   if (typeof password !== "string") {
     return "Password is required.";
