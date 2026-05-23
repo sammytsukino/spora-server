@@ -99,7 +99,4 @@ async function syncLanguageScreenReport(floraId, title, text) {
 
 module.exports = {
   syncLanguageScreenReport,
-  syncLanguageScreenReportWithModel,
-  SOURCE,
-  CATEGORY,
 };

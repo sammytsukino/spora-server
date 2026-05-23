@@ -17,4 +17,4 @@ async function connectDb() {
   });
 }
 
-module.exports = { connectDb, getMongoUri };
+module.exports = { connectDb };

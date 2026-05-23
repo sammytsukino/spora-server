@@ -1,6 +1,6 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const { v2: cloudinary } = require("cloudinary");
+const { cloudinary, ensureCloudinaryConfigured } = require("../config/cloudinary");
 const User = require("../models/User");
 const {
   setRefreshTokenCookie,
@@ -9,17 +9,7 @@ const {
 } = require("../lib/refreshCookie");
 const { validatePassword } = require("../lib/passwordPolicy");
 
-if (
-  process.env.CLOUDINARY_CLOUD_NAME &&
-  process.env.CLOUDINARY_API_KEY &&
-  process.env.CLOUDINARY_API_SECRET
-) {
-  cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-  });
-}
+ensureCloudinaryConfigured();
 
 const ACCESS_TOKEN_EXPIRY = "15m";
 const REFRESH_TOKEN_EXPIRY = "7d";

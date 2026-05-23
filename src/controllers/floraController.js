@@ -1,17 +1,11 @@
-const { v2: cloudinary } = require("cloudinary");
 const Flora = require("../models/Flora");
 const Follow = require("../models/Follow");
 const Report = require("../models/Report");
+const { cloudinary, ensureCloudinaryConfigured } = require("../config/cloudinary");
 const { scanSensitiveLanguage } = require("../lib/scanSensitiveLanguage");
 const { syncLanguageScreenReport } = require("../services/languageScreenReport");
 
-if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
-  cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-  });
-}
+ensureCloudinaryConfigured();
 
 function buildFloraPayload(user, body) {
   const payload = {

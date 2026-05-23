@@ -99,6 +99,51 @@
             "header": [],
             "url": "{{baseUrl}}/api/auth/me"
           }
+        },
+        {
+          "name": "Refresh",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/auth/refresh"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/auth/logout"
+          }
+        },
+        {
+          "name": "Update Me",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const token = pm.collectionVariables.get('token');",
+                  "if (token) {",
+                  "    pm.request.headers.add({",
+                  "        key: 'Authorization',",
+                  "        value: 'Bearer ' + token",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/auth/me",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Updated Display Name\"\n}"
+            }
+          }
         }
       ]
     },
@@ -117,6 +162,35 @@
           "request": {
             "method": "GET",
             "url": "{{baseUrl}}/api/floras/{{floraId}}"
+          }
+        },
+        {
+          "name": "Screen Preview",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const token = pm.collectionVariables.get('token');",
+                  "if (token) {",
+                  "    pm.request.headers.add({",
+                  "        key: 'Authorization',",
+                  "        value: 'Bearer ' + token",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/floras/screen-preview",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Preview Title\",\n  \"text\": \"Preview body text\"\n}"
+            }
           }
         },
         {
@@ -247,6 +321,126 @@
       ]
     },
     {
+      "name": "Follows",
+      "item": [
+        {
+          "name": "My Following",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const token = pm.collectionVariables.get('token');",
+                  "if (token) { pm.request.headers.add({ key: 'Authorization', value: 'Bearer ' + token }); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/follows/me/following" }
+        },
+        {
+          "name": "Follow User",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const token = pm.collectionVariables.get('token');",
+                  "if (token) { pm.request.headers.add({ key: 'Authorization', value: 'Bearer ' + token }); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/follows/{{userId}}" }
+        },
+        {
+          "name": "Unfollow User",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const token = pm.collectionVariables.get('token');",
+                  "if (token) { pm.request.headers.add({ key: 'Authorization', value: 'Bearer ' + token }); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/api/follows/{{userId}}" }
+        },
+        {
+          "name": "Follow Status",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const token = pm.collectionVariables.get('token');",
+                  "if (token) { pm.request.headers.add({ key: 'Authorization', value: 'Bearer ' + token }); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/follows/{{userId}}/status" }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "By Username",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/users/by-username/cultivator01" }
+        },
+        {
+          "name": "Followers",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/users/{{userId}}/followers" }
+        },
+        {
+          "name": "Following",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/users/{{userId}}/following" }
+        }
+      ]
+    },
+    {
+      "name": "Reader",
+      "item": [
+        {
+          "name": "TTS",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/reader/tts",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"floraId\": \"{{floraId}}\",\n  \"speed\": 0.8\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Contact",
+      "item": [
+        {
+          "name": "Submit Contact",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/contact",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Visitor\",\n  \"email\": \"visitor@example.com\",\n  \"subject\": \"Hello\",\n  \"message\": \"Testing contact form\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "Admin",
       "item": [
         {
@@ -298,6 +492,22 @@
             "header": [],
             "url": "{{baseUrl}}/api/admin/usage"
           }
+        },
+        {
+          "name": "Usage Charts",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const token = pm.collectionVariables.get('token');",
+                  "if (token) { pm.request.headers.add({ key: 'Authorization', value: 'Bearer ' + token }); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/admin/usage/charts" }
         },
         {
           "name": "List Users",
@@ -443,6 +653,22 @@
           }
         },
         {
+          "name": "Report Signal",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const token = pm.collectionVariables.get('token');",
+                  "if (token) { pm.request.headers.add({ key: 'Authorization', value: 'Bearer ' + token }); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/admin/reports/signal" }
+        },
+        {
           "name": "Update Report",
           "event": [
             {
@@ -497,6 +723,22 @@
             "header": [],
             "url": "{{baseUrl}}/api/admin/flagged"
           }
+        },
+        {
+          "name": "List Admin Floras",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const token = pm.collectionVariables.get('token');",
+                  "if (token) { pm.request.headers.add({ key: 'Authorization', value: 'Bearer ' + token }); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/admin/floras" }
         },
         {
           "name": "Update Flora Status",

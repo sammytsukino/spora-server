@@ -32,9 +32,10 @@ This repository provides:
 ♦ Flora publishing, lineage memory, and retrieval APIs  
 ♦ Social graph operations (follow/unfollow)  
 ♦ Moderation and stewardship operations  
-♦ Verification and notification flows  
 ♦ Contact form email delivery to active admins  
 ♦ Optional media/voice integrations (Cloudinary + VoiPi)
+
+> **Note:** The npm package name is `spora-backend`; the repository folder is `spora-server`.
 
 ⟡ ═════════════════════════════════════════ ⟡
 
@@ -78,8 +79,7 @@ The API is organized as a set of bounded domains:
 ▸ `POST /api/auth/refresh`  
 ▸ `POST /api/auth/logout`  
 ▸ `GET /api/auth/me`  
-▸ `PATCH /api/auth/me`  
-▸ `GET|POST /api/auth/verify-email`
+▸ `PATCH /api/auth/me`
 
 ### Floras
 ▸ `GET /api/floras`  
@@ -97,6 +97,11 @@ The API is organized as a set of bounded domains:
 ▸ `POST /api/follows/:userId`  
 ▸ `DELETE /api/follows/:userId`  
 ▸ `GET /api/follows/:userId/status`
+
+### Users
+▸ `GET /api/users/by-username/:username`  
+▸ `GET /api/users/:id/followers`  
+▸ `GET /api/users/:id/following`
 
 ### Reports
 ▸ `POST /api/reports`
@@ -177,7 +182,7 @@ Also supported (optional / feature-dependent):
 MONGO_URL=
 
 # SMTP for transactional emails
-# (account verification + admin report alerts + admin contact alerts)
+# (admin report alerts + admin contact alerts)
 SMTP_HOST=
 SMTP_PORT=587
 SMTP_SECURE=false
@@ -211,12 +216,13 @@ npm start     # node index.js
 
 ```bash
 npm run dev            # Start development server with nodemon
-npm run server         # Alias of dev
 npm start              # Start production server
 npm test               # Run Jest suite
 npm run test:watch     # Jest watch mode
 npm run test:coverage  # Coverage report
 ```
+
+Maintenance script (not wired to npm): `node scripts/verify-all-admins.js` sets `emailVerified: true` on all admin users in the database.
 
 ⟡ ═════════════════════════════════════════ ⟡
 
@@ -225,17 +231,20 @@ npm run test:coverage  # Coverage report
 ```text
 spora-server/
 ├── index.js                      # Main runtime entry; boots src/server.js
+├── scripts/
+│   └── verify-all-admins.js      # Maintenance: mark admin users as emailVerified
+├── config/
+│   └── sensitive-terms.json      # Lexical moderation term list
 ├── src/
 │   ├── app.js                    # Express app composition (routes + middleware)
 │   ├── server.js                 # Server bootstrap and DB connection
-│   ├── config/                   # Config helpers
+│   ├── config/                   # DB + Cloudinary helpers
 │   ├── controllers/              # Domain/business handlers
 │   ├── lib/                      # Auth/session/security utility modules
 │   ├── middleware/               # Auth + error middleware
 │   ├── models/                   # Mongoose domain models
 │   ├── routes/                   # Route modules for modular stack
 │   └── services/                 # Email and moderation supporting services
-├── config/                       # Shared static moderation config
 ├── postman_collection.json       # API testing collection
 └── README.md
 ```
@@ -309,9 +318,11 @@ These conventions keep `spora-server` maintainable and aligned with current arch
 ## ◑ Testing Notes
 
 Backend tests include:
-▸ Route-level behavior checks  
+▸ Route-level behavior checks (auth, floras, **admin**, **follows**, **reader**, **contact**)  
 ▸ Middleware validations  
 ▸ Utility service tests (token and language screening flows)
+
+Controller coverage is reported separately from routes/middleware. Thresholds apply per domain (`contactController` ≥90%, `followController`/`readerController` ≥60%, incremental targets for `adminController`). Reader TTS success path is validated manually or in staging — Jest asserts validation and 502 when the VoiPi dynamic import is unavailable in the test runtime.
 
 Suggested validation pass before deployment:
 ```bash

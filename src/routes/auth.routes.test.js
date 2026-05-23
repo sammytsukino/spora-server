@@ -186,3 +186,118 @@ describe("GET /api/auth/me", () => {
     expect(res.body).not.toHaveProperty("password");
   });
 });
+
+describe("POST /api/auth/signin validation", () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it("returns 400 when fields missing", async () => {
+    const res = await request(app).post("/api/auth/signin").send({ username: "u" });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("POST /api/auth/signup honeypot", () => {
+  it("returns fake success for bot website field", async () => {
+    const res = await request(app).post("/api/auth/signup").send({
+      username: "bot",
+      email: "bot@e.com",
+      password: "Password123!",
+      website: "http://spam.com",
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.token).toBe("fake-bot-token");
+    expect(User.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/auth/refresh", () => {
+  const userId = "507f1f77bcf86cd799439011";
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it("returns 400 when refresh token missing", async () => {
+    const res = await request(app).post("/api/auth/refresh").send({});
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 401 for invalid refresh token", async () => {
+    const res = await request(app)
+      .post("/api/auth/refresh")
+      .send({ refreshToken: "not-a-valid-token" });
+    expect(res.status).toBe(401);
+  });
+
+  it("issues new access token for valid refresh token", async () => {
+    User.findById.mockResolvedValue({
+      _id: userId,
+      username: "u",
+      displayName: "U",
+      avatar: null,
+      email: "u@e.com",
+      role: "cultivator",
+      accountStatus: "active",
+    });
+    const refreshToken = jwt.sign(
+      { sub: userId, role: "cultivator", type: "refresh" },
+      process.env.JWT_SECRET
+    );
+
+    const res = await request(app)
+      .post("/api/auth/refresh")
+      .send({ refreshToken });
+
+    expect(res.status).toBe(200);
+    expect(res.body.token).toEqual(expect.any(String));
+    expect(res.body.user.username).toBe("u");
+  });
+});
+
+describe("POST /api/auth/logout", () => {
+  it("returns ok and clears session cookie", async () => {
+    const res = await request(app).post("/api/auth/logout");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+  });
+});
+
+describe("PATCH /api/auth/me", () => {
+  const userId = "507f1f77bcf86cd799439011";
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it("returns 401 without token", async () => {
+    const res = await request(app).patch("/api/auth/me").send({ displayName: "X" });
+    expect(res.status).toBe(401);
+  });
+
+  it("updates profile for authenticated user", async () => {
+    const user = {
+      _id: userId,
+      username: "me",
+      displayName: "Me",
+      avatar: null,
+      bio: "",
+      followersCount: 0,
+      followingCount: 0,
+      email: "m@e.com",
+      role: "cultivator",
+      accountStatus: "active",
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    User.findById.mockResolvedValue(user);
+
+    const token = jwt.sign(
+      { sub: userId, role: "cultivator", type: "access" },
+      process.env.JWT_SECRET
+    );
+
+    const res = await request(app)
+      .patch("/api/auth/me")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ displayName: "New Me", bio: "Updated bio" });
+
+    expect(res.status).toBe(200);
+    expect(user.save).toHaveBeenCalled();
+    expect(res.body.displayName).toBe("New Me");
+  });
+});
