@@ -32,6 +32,32 @@ function buildFloraPayload(user, body) {
   return payload;
 }
 
+async function validateCuttingPayload(payload) {
+  const parentId = payload.lineage?.parentFloraId;
+  if (!parentId) return null;
+
+  const parent = await Flora.findById(parentId);
+  if (!parent || parent.isDeleted) {
+    return { status: 400, error: "Parent Flora not found" };
+  }
+  if (parent.status !== "blossoming") {
+    return { status: 400, error: "Cuttings are only allowed from blossoming Floras" };
+  }
+
+  const parentText = String(parent.text || "");
+  const childText = String(payload.text || "");
+  if (!childText.startsWith(parentText)) {
+    return { status: 400, error: "Parent text cannot be modified in a cutting" };
+  }
+
+  const added = childText.slice(parentText.length).replace(/^\n+/, "").trim();
+  if (!added) {
+    return { status: 400, error: "Cutting must include new text beyond the parent Flora" };
+  }
+
+  return null;
+}
+
 async function listFloras(req, res) {
   const { status, authorId, generation, followingOnly, includeHidden } = req.query;
   const filter = { isDeleted: { $ne: true } };
@@ -110,6 +136,11 @@ async function createFlora(req, res) {
   }
 
   const payload = buildFloraPayload(req.user, req.body);
+
+  const cuttingError = await validateCuttingPayload(payload);
+  if (cuttingError) {
+    return res.status(cuttingError.status).json({ error: cuttingError.error });
+  }
 
   if (thumbnailData && typeof thumbnailData === "string") {
     const hasCloudinary = process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET;

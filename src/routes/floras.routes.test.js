@@ -183,6 +183,84 @@ describe("POST /api/floras", () => {
     expect(res.body.title).toBe("Bloom");
     expect(syncLanguageScreenReport).toHaveBeenCalled();
   });
+
+  it("returns 400 when cutting modifies parent text", async () => {
+    Flora.findById.mockResolvedValue(
+      blossomingFlora({ text: "Original parent text." })
+    );
+
+    const res = await request(app)
+      .post("/api/floras")
+      .set("Authorization", `Bearer ${cultivatorToken()}`)
+      .send({
+        title: "Cutting",
+        text: "Tampered parent text.\nMy addition.",
+        status: "blossoming",
+        lineage: {
+          generation: 1,
+          parentFloraId: FLORA_ID,
+          rootFloraId: FLORA_ID,
+        },
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/parent text cannot be modified/i);
+    expect(Flora.create).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when cutting adds no new text", async () => {
+    Flora.findById.mockResolvedValue(
+      blossomingFlora({ text: "Original parent text." })
+    );
+
+    const res = await request(app)
+      .post("/api/floras")
+      .set("Authorization", `Bearer ${cultivatorToken()}`)
+      .send({
+        title: "Cutting",
+        text: "Original parent text.",
+        status: "blossoming",
+        lineage: {
+          generation: 1,
+          parentFloraId: FLORA_ID,
+          rootFloraId: FLORA_ID,
+        },
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/new text beyond the parent/i);
+    expect(Flora.create).not.toHaveBeenCalled();
+  });
+
+  it("creates cutting when parent text is preserved and extended", async () => {
+    const parentText = "Original parent text.";
+    Flora.findById
+      .mockResolvedValueOnce(blossomingFlora({ text: parentText }))
+      .mockResolvedValueOnce(blossomingFlora({ text: parentText }));
+    const created = blossomingFlora({
+      text: `${parentText}\nMy cutting addition.`,
+      lineage: { generation: 1, parentFloraId: FLORA_ID, rootFloraId: FLORA_ID },
+    });
+    Flora.create.mockResolvedValue(created);
+    Flora.findByIdAndUpdate = jest.fn().mockResolvedValue(undefined);
+
+    const res = await request(app)
+      .post("/api/floras")
+      .set("Authorization", `Bearer ${cultivatorToken()}`)
+      .send({
+        title: "Cutting",
+        text: `${parentText}\nMy cutting addition.`,
+        status: "blossoming",
+        lineage: {
+          generation: 1,
+          parentFloraId: FLORA_ID,
+          rootFloraId: FLORA_ID,
+        },
+      });
+
+    expect(res.status).toBe(201);
+    expect(Flora.create).toHaveBeenCalled();
+  });
 });
 
 describe("PATCH /api/floras/:id", () => {
