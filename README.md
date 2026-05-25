@@ -281,8 +281,8 @@ spora-server/
 ## ◈ Language Support
 
 SPORA currently operates with mixed UI/content strings and supports usage in:
-▸ **Español**  
-▸ **Castellano**
+▸ **English**  
+▸ **Spanish**
 
 This includes user-facing content and editorial copy currently present across the project.
 
