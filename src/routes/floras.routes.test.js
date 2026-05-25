@@ -155,6 +155,7 @@ describe("POST /api/floras", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     User.findById.mockResolvedValue(activeUserDoc());
+    User.findByIdAndUpdate = jest.fn().mockResolvedValue(undefined);
   });
 
   it("returns 400 when title or text missing", async () => {
@@ -182,6 +183,15 @@ describe("POST /api/floras", () => {
     expect(res.status).toBe(201);
     expect(res.body.title).toBe("Bloom");
     expect(syncLanguageScreenReport).toHaveBeenCalled();
+    expect(User.findByIdAndUpdate).toHaveBeenCalledWith(
+      DEFAULT_USER_ID,
+      {
+        $inc: {
+          "stats.totalFloras": 1,
+          "stats.florasCreated": 1,
+        },
+      }
+    );
   });
 
   it("returns 400 when cutting modifies parent text", async () => {
@@ -260,6 +270,24 @@ describe("POST /api/floras", () => {
 
     expect(res.status).toBe(201);
     expect(Flora.create).toHaveBeenCalled();
+    expect(User.findByIdAndUpdate).toHaveBeenCalledWith(
+      DEFAULT_USER_ID,
+      {
+        $inc: {
+          "stats.totalFloras": 1,
+          "stats.cuttingsTaken": 1,
+        },
+      }
+    );
+    expect(Flora.findByIdAndUpdate).toHaveBeenCalledWith(
+      FLORA_ID,
+      {
+        $inc: {
+          "lineage.childrenCount": 1,
+          "stats.cuttingsTaken": 1,
+        },
+      }
+    );
   });
 });
 
@@ -325,7 +353,10 @@ describe("PATCH /api/floras/:id", () => {
 });
 
 describe("DELETE /api/floras/:id", () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    User.findByIdAndUpdate = jest.fn().mockResolvedValue(undefined);
+  });
 
   it("returns 404 when flora missing", async () => {
     User.findById.mockResolvedValue(activeUserDoc());
@@ -350,6 +381,15 @@ describe("DELETE /api/floras/:id", () => {
 
     expect(res.status).toBe(204);
     expect(Report.deleteMany).toHaveBeenCalled();
+    expect(User.findByIdAndUpdate).toHaveBeenCalledWith(
+      DEFAULT_USER_ID,
+      {
+        $inc: {
+          "stats.totalFloras": -1,
+          "stats.florasCreated": -1,
+        },
+      }
+    );
     expect(flora.deleteOne).toHaveBeenCalled();
   });
 });

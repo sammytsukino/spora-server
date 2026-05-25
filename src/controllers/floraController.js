@@ -1,6 +1,7 @@
 const Flora = require("../models/Flora");
 const Follow = require("../models/Follow");
 const Report = require("../models/Report");
+const User = require("../models/User");
 const { cloudinary, ensureCloudinaryConfigured } = require("../config/cloudinary");
 const { scanSensitiveLanguage } = require("../lib/scanSensitiveLanguage");
 const { syncLanguageScreenReport } = require("../services/languageScreenReport");
@@ -56,6 +57,26 @@ async function validateCuttingPayload(payload) {
   }
 
   return null;
+}
+
+function userFloraStatsDelta(lineage, direction = 1) {
+  const generation = lineage?.generation ?? 0;
+  const isOriginal = generation === 0;
+  return {
+    "stats.totalFloras": direction,
+    ...(isOriginal
+      ? { "stats.florasCreated": direction }
+      : { "stats.cuttingsTaken": direction }),
+  };
+}
+
+async function syncUserFloraStats(userId, lineage, direction = 1) {
+  if (!userId) return;
+  try {
+    await User.findByIdAndUpdate(userId, { $inc: userFloraStatsDelta(lineage, direction) });
+  } catch (err) {
+    console.warn("Failed to sync user flora stats:", err?.message || err);
+  }
 }
 
 async function listFloras(req, res) {
@@ -163,10 +184,12 @@ async function createFlora(req, res) {
 
   const flora = await Flora.create(payload);
 
+  await syncUserFloraStats(req.user._id, payload.lineage, 1);
+
   if (payload.lineage?.parentFloraId) {
     try {
       await Flora.findByIdAndUpdate(payload.lineage.parentFloraId, {
-        $inc: { "lineage.childrenCount": 1 },
+        $inc: { "lineage.childrenCount": 1, "stats.cuttingsTaken": 1 },
       });
     } catch (err) {
       console.warn("Failed to update parent Flora childrenCount:", err?.message || err);
@@ -260,6 +283,18 @@ async function deleteFlora(req, res) {
   }
 
   await Report.deleteMany({ reportedFloraId: flora._id });
+  await syncUserFloraStats(flora.authorId, flora.lineage, -1);
+
+  if (flora.lineage?.parentFloraId) {
+    try {
+      await Flora.findByIdAndUpdate(flora.lineage.parentFloraId, {
+        $inc: { "lineage.childrenCount": -1, "stats.cuttingsTaken": -1 },
+      });
+    } catch (err) {
+      console.warn("Failed to update parent Flora on delete:", err?.message || err);
+    }
+  }
+
   await flora.deleteOne();
   res.status(204).send();
 }
