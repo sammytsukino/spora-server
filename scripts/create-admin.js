@@ -2,8 +2,8 @@
 
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 const bcrypt = require('bcryptjs');
-const { connectDB } = require('../db');
-const User = require('../models/User');
+const { connectDb } = require('../src/config/db');
+const User = require('../src/models/User');
 
 async function main() {
   const args = process.argv.slice(2);
@@ -16,7 +16,7 @@ async function main() {
       console.error('Usage: node scripts/create-admin.js --promote <username>');
       process.exit(1);
     }
-    await connectDB();
+    await connectDb();
     const user = await User.findOne({ username: username.trim() });
     if (!user) {
       console.error(`User "${username}" not found.`);
@@ -48,7 +48,7 @@ Create or promote an admin user:
     process.exit(1);
   }
 
-  await connectDB();
+  await connectDb();
 
   let user = await User.findOne({ username: username.trim() });
   if (user) {

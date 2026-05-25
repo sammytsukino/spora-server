@@ -246,7 +246,10 @@ npm run test:watch     # Jest watch mode
 npm run test:coverage  # Coverage report
 ```
 
-Maintenance script (not wired to npm): `node scripts/verify-all-admins.js` sets `emailVerified: true` on all admin users in the database.
+Maintenance scripts (not wired to npm):
+
+▸ `node scripts/verify-all-admins.js` — sets `emailVerified: true` on all admin users in the database  
+▸ `node scripts/create-admin.js <username> <password>` — create or promote an admin user (`--promote <username>` to promote an existing account)
 
 ⟡ ═════════════════════════════════════════ ⟡
 
@@ -359,7 +362,7 @@ npm run test:coverage
 ## ◍ License
 
 This repository is part of the SPORA project.
-Code license details should be defined in the project `LICENSE` file.
+Code license details are defined in [`LICENSE.md`](./LICENSE.md).
 
 Individual Floras published in the platform are licensed by their authors under platform rules.
 
