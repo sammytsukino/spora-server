@@ -61,8 +61,9 @@ This repository provides:
 ▸ Automatic language-screen report sync for created/updated Floras
 
 ### Optional Integrations
-▸ Cloudinary for avatar/flora thumbnail uploads  
-▸ VoiPi for `/api/reader/tts` audio generation
+▸ **Cloudinary** (avatars + flora thumbnails on publish) — **required for full visual TFG demo**; see [`.env.example`](./.env.example)  
+▸ VoiPi for `/api/reader/tts` audio generation  
+▸ SMTP for contact form and admin email alerts
 
 ⟡ ═════════════════════════════════════════ ⟡
 
@@ -165,43 +166,66 @@ npm install
 ```
 
 ### Environment Variables
-Create `.env` in repository root (same level as `index.js`).
 
-Minimal local setup:
+> **Start here:** copy [`.env.example`](./.env.example) to `.env` and follow every comment block.  
+> **Do not skip this step.** SPORA is a two-repo system (client + server); misconfigured env vars are the most common cause of “the app loads but nothing works” (empty Garden, failed login, broken contact form, missing flora thumbnails).
+
+The example file documents **where to obtain each value**, **why it is required**, and **what breaks if it is missing**. Read it end-to-end before deploying or presenting the TFG.
+
+#### Quick reference
+
+| Variable | Required | Where to get it | If missing / wrong |
+|----------|----------|-----------------|---------------------|
+| `MONGODB_URI` | **Yes** (prod) | [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) → Connect → Drivers | No users, floras, or persistence |
+| `JWT_SECRET` | **Yes** | `openssl rand -base64 48` (≥32 chars) | Auth cannot work securely |
+| `CORS_ORIGIN` | **Yes** (prod) | Public SPA URL (e.g. Vercel) | Browser blocks API; CORS errors |
+| `FRONTEND_URL` | **Yes** (prod) | Same SPA URL (no `/api`) | Email links / redirects break |
+| `CLOUDINARY_*` (×3) | **Strongly recommended** | [Cloudinary Console](https://cloudinary.com/console) | See below — **critical for TFG demo** |
+| `SMTP_*` | Recommended | Gmail app password, SendGrid, etc. | Contact form → 503; no admin mail |
+| TTS (VoiPi) | No `.env` key | Bundled in server runtime | Reader voice button may 502 on some hosts |
+
+#### Cloudinary — not optional for a complete SPORA demo
+
+The code treats Cloudinary as “graceful degradation” (the API still creates floras without crashing), but **omitting Cloudinary removes core visible behavior**:
+
+1. **Flora thumbnails on publish** — Laboratory captures the generative canvas and uploads it via the backend. Without `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET`, floras save **without** `thumbnailUrl`. Garden, Greenhouse, and profile grids show generic placeholders instead of each cultivator’s generative artwork.
+2. **Profile avatars** — uploaded avatars are stored in Cloudinary; without credentials they are not persisted.
+3. **Thesis narrative** — SPORA’s loop is *write → generate → publish → exhibit*. Skipping Cloudinary breaks the exhibit step even though the text lineage still works.
+
+Free tier is enough for academic deployment. Configure all three Cloudinary variables in **both** local `.env` and Render/production environment.
+
+#### Client ↔ server pairing
+
+In `spora-client`, copy [`.env.example`](../spora-client/.env.example) → `.env`:
+
+```env
+VITE_API_BASE_URL=http://localhost:4000/api
+```
+
+Rules:
+
+- `VITE_API_BASE_URL` must end with `/api` and match your running backend.
+- The SPA origin (e.g. `http://localhost:5173`) must appear in server `CORS_ORIGIN`.
+- After changing either side’s env, restart dev servers and redeploy both services in production.
+
+#### Local minimal `.env` (development only)
+
 ```env
 PORT=4000
 JWT_SECRET=use_a_long_random_string_at_least_32_chars
 MONGODB_URI=mongodb://localhost:27017/sporadb
 CORS_ORIGIN=http://localhost:5173
 FRONTEND_URL=http://localhost:5173
-```
-
-Also supported (optional / feature-dependent):
-```env
-# Legacy Mongo alias also accepted
-MONGO_URL=
-
-# SMTP for transactional emails
-# (admin report alerts + admin contact alerts)
-SMTP_HOST=
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=
-SMTP_PASS=
-SMTP_FROM=
-
-# Cloudinary for avatar/flora thumbnails
-CLOUDINARY_CLOUD_NAME=
-CLOUDINARY_API_KEY=
-CLOUDINARY_API_SECRET=
-
-# Reader TTS uses VoiPi (no API key required by default)
-# It will try edge-tts, then google-tts, then piper.
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
 ```
 
 Important startup constraints:
+
 ▸ `JWT_SECRET` is mandatory and must be at least 32 characters  
-▸ In production, `CORS_ORIGIN` must be explicit (never `*`)
+▸ In production, `CORS_ORIGIN` must be explicit (never `*`)  
+▸ Full annotated template: [`.env.example`](./.env.example)
 
 ### Run
 ```bash
