@@ -7,6 +7,7 @@
 ## ✦ Table of Contents
 
 - [What is SPORA Server?](#-what-is-spora-server)
+- [Screenshots](#-screenshots)
 - [Backend Architecture](#-backend-architecture)
 - [API Surface Overview](#-api-surface-overview)
 - [Tech Stack](#-tech-stack)
@@ -36,6 +37,22 @@ This repository provides:
 ♦ Optional media/voice integrations (Cloudinary + VoiPi)
 
 > **Note:** The npm package name is `spora-backend`; the repository folder is `spora-server`.
+
+⟡ ═════════════════════════════════════════ ⟡
+
+## ◈ Screenshots
+
+> **Replace placeholders:** add your PNG/WebP files under [`docs/screenshots/`](./docs/screenshots/) using the filenames below. Capture guide: [`docs/screenshots/README.md`](./docs/screenshots/README.md).
+
+| API health | Postman collection |
+|:----------:|:------------------:|
+| ![GET /api/health response](./docs/screenshots/api-health.png) | ![Postman — SPORA API folders](./docs/screenshots/postman-overview.png) |
+| Confirms the backend is reachable | Imported from `postman_collection.json` |
+
+| Test coverage | Deployment |
+|:-------------:|:----------:|
+| ![Jest coverage summary](./docs/screenshots/jest-coverage.png) | ![Render service dashboard — secrets redacted](./docs/screenshots/deployment-render.png) |
+| Output of `npm run test:coverage` | Production/staging host with env vars hidden |
 
 ⟡ ═════════════════════════════════════════ ⟡
 
@@ -70,6 +87,10 @@ This repository provides:
 ## ❖ API Surface Overview
 
 The API is organized as a set of bounded domains:
+
+![Postman — endpoint groups aligned with route modules](./docs/screenshots/postman-overview.png)
+
+*Use `postman_collection.json` to exercise Auth, Floras, Admin, Follows, Reader, and Contact without the SPA.*
 
 ### Health
 ▸ `GET /api/health`
@@ -234,6 +255,10 @@ npm run dev   # nodemon index.js
 npm start     # node index.js
 ```
 
+Verify the API is up:
+
+![GET /api/health — {"ok":true}](./docs/screenshots/api-health.png)
+
 ⟡ ═════════════════════════════════════════ ⟡
 
 ## ◈ Available Scripts
@@ -273,6 +298,8 @@ spora-server/
 │   ├── routes/                   # Route modules for modular stack
 │   └── services/                 # Email and moderation supporting services
 ├── postman_collection.json       # API testing collection
+├── docs/
+│   └── screenshots/              # README screenshot assets (see README inside)
 └── README.md
 ```
 
@@ -356,6 +383,8 @@ Suggested validation pass before deployment:
 npm test
 npm run test:coverage
 ```
+
+![Jest coverage — route and controller thresholds](./docs/screenshots/jest-coverage.png)
 
 ⟡ ═════════════════════════════════════════ ⟡
 
