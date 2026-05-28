@@ -26,6 +26,18 @@
 
 ## ✿ What is SPORA Server?
 
+| API health | Postman collection |
+|:----------:|:------------------:|
+| ![GET /api/health response](./docs/screenshots/api-health.png) | ![Postman — SPORA API folders](./docs/screenshots/postman-overview.png) |
+| Confirms the backend is reachable | Imported from `postman_collection.json` |
+
+| Test coverage | Deployment |
+|:-------------:|:----------:|
+| ![Jest coverage summary](./docs/screenshots/jest-coverage.png) | ![Render service dashboard — secrets redacted](./docs/screenshots/deployment-render.png) |
+| Output of `npm run test:coverage` | Production/staging host with env vars hidden |
+
+⟡ ═════════════════════════════════════════ ⟡
+
 `spora-server` is the structural root of SPORA: the API layer where authorship, lineage, moderation, and publication rules are preserved over time.
 
 This repository provides:
@@ -38,23 +50,6 @@ This repository provides:
 
 > **Note:** The npm package name is `spora-backend`; the repository folder is `spora-server`.
 
-⟡ ═════════════════════════════════════════ ⟡
-
-## ◈ Screenshots
-
-> **Replace placeholders:** add your PNG/WebP files under [`docs/screenshots/`](./docs/screenshots/) using the filenames below. Capture guide: [`docs/screenshots/README.md`](./docs/screenshots/README.md).
-
-| API health | Postman collection |
-|:----------:|:------------------:|
-| ![GET /api/health response](./docs/screenshots/api-health.png) | ![Postman — SPORA API folders](./docs/screenshots/postman-overview.png) |
-| Confirms the backend is reachable | Imported from `postman_collection.json` |
-
-| Test coverage | Deployment |
-|:-------------:|:----------:|
-| ![Jest coverage summary](./docs/screenshots/jest-coverage.png) | ![Render service dashboard — secrets redacted](./docs/screenshots/deployment-render.png) |
-| Output of `npm run test:coverage` | Production/staging host with env vars hidden |
-
-⟡ ═════════════════════════════════════════ ⟡
 
 ## ♢ Backend Architecture
 
